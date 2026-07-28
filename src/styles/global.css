@@ -1217,8 +1217,10 @@ button {
   padding: clamp(40px, 5vw, 64px) 0 clamp(72px, 9vw, 112px);
 }
 
+/* 和页头标题左对齐；不写 margin-inline 会继承 .section-shell 的 auto 而居中 */
 .search-shell {
   max-width: 700px;
+  margin-inline: 0;
 }
 
 .search-unavailable {
