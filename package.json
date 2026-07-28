@@ -1,0 +1,30 @@
+{
+  "name": "sparkle-blog",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build && pagefind --site dist",
+    "preview": "astro preview",
+    "check": "astro check",
+    "check:dist": "node scripts/check-dist.mjs",
+    "verify": "npm run check && npm run build && npm run check:dist",
+    "new": "node scripts/new-post.mjs",
+    "migrate": "node scripts/migrate-wordpress.mjs"
+  },
+  "dependencies": {
+    "@astrojs/rss": "^4.0.19",
+    "@astrojs/sitemap": "^3.7.3",
+    "astro": "^7.1.4",
+    "lucide-astro": "^0.556.0"
+  },
+  "devDependencies": {
+    "@astrojs/check": "^0.9.10",
+    "cheerio": "^1.2.0",
+    "pagefind": "^1.5.2",
+    "turndown": "^7.2.4",
+    "turndown-plugin-gfm": "^1.0.2",
+    "typescript": "^6.0.3"
+  }
+}

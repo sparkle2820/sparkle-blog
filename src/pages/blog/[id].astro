@@ -1,0 +1,89 @@
+---
+import { ArrowLeft, ArrowRight, CalendarDays, Clock3 } from 'lucide-astro';
+import { render, type CollectionEntry } from 'astro:content';
+import { getCategory } from '../../content/categories';
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import { formatDate, getPublishedPosts, readingMinutes } from '../../utils/posts';
+
+export async function getStaticPaths() {
+  const posts = await getPublishedPosts();
+
+  return posts.map((post, index) => ({
+    params: { id: post.id },
+    props: {
+      post,
+      newer: index > 0 ? posts[index - 1] : null,
+      older: index < posts.length - 1 ? posts[index + 1] : null,
+    },
+  }));
+}
+
+interface Props {
+  post: CollectionEntry<'blog'>;
+  newer: CollectionEntry<'blog'> | null;
+  older: CollectionEntry<'blog'> | null;
+}
+
+const { post, newer, older } = Astro.props;
+const { Content } = await render(post);
+const date = formatDate(post.data.publishedAt);
+const minutes = readingMinutes(post.body);
+const category = getCategory(post.data.category);
+---
+
+<BaseLayout
+  title={post.data.title}
+  description={post.data.description}
+  image={post.data.featuredImage}
+  article
+  transparentHeader
+>
+  <article class="article-page" data-pagefind-body>
+    <header class="article-hero">
+      <img
+        class="article-hero-media"
+        src={post.data.featuredImage}
+        alt=""
+        fetchpriority="high"
+        data-parallax="10"
+        data-pagefind-meta="image[src]"
+      />
+      <div class="article-hero-veil"></div>
+
+      <div class="article-hero-inner">
+        <a class="back-link" href="/blog/"><ArrowLeft size={17} stroke-width={2} /> 返回博客</a>
+        <p class="eyebrow light">
+          <a href={`/blog/category/${category.slug}/`}>{category.name}</a>
+        </p>
+        <h1 data-pagefind-meta="title">{post.data.title}</h1>
+        <p class="article-lede">{post.data.description}</p>
+        <div class="article-meta">
+          <span>
+            <CalendarDays size={17} stroke-width={2} />
+            <time datetime={post.data.publishedAt.toISOString()}>{date}</time>
+          </span>
+          <span><Clock3 size={17} stroke-width={2} />约 {minutes} 分钟</span>
+        </div>
+      </div>
+    </header>
+
+    <div class="article-body prose">
+      <Content />
+    </div>
+
+    <nav class="post-navigation" aria-label="文章导航">
+      {older ? (
+        <a href={`/blog/${older.id}/`}>
+          <span><ArrowLeft size={17} stroke-width={2} />上一篇</span>
+          <strong>{older.data.title}</strong>
+        </a>
+      ) : <span></span>}
+      {newer ? (
+        <a class="next-post" href={`/blog/${newer.id}/`}>
+          <span>下一篇<ArrowRight size={17} stroke-width={2} /></span>
+          <strong>{newer.data.title}</strong>
+        </a>
+      ) : <span></span>}
+    </nav>
+  </article>
+</BaseLayout>

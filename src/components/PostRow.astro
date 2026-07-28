@@ -1,0 +1,30 @@
+---
+import { getCategory } from '../content/categories';
+import { formatDate, readingMinutes, type Post } from '../utils/posts';
+
+interface Props {
+  post: Post;
+}
+
+const { post } = Astro.props;
+const href = `/blog/${post.id}/`;
+const meta = getCategory(post.data.category);
+const minutes = readingMinutes(post.body);
+---
+
+<article class="post-row">
+  <a class="post-row-media" href={href} tabindex="-1" aria-hidden="true">
+    <img src={post.data.featuredImage} alt="" loading="lazy" />
+  </a>
+
+  <div class="post-row-body">
+    <p class="post-row-meta">
+      <a class="story-cat" href={`/blog/category/${meta.slug}/`}>{meta.name}</a>
+      <time datetime={post.data.publishedAt.toISOString()}>{formatDate(post.data.publishedAt)}</time>
+      <span>约 {minutes} 分钟</span>
+    </p>
+
+    <h2><a href={href}>{post.data.title}</a></h2>
+    <p class="post-row-excerpt">{post.data.description}</p>
+  </div>
+</article>

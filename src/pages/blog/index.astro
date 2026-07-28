@@ -1,0 +1,36 @@
+---
+import { Search } from 'lucide-astro';
+import CategoryBar from '../../components/CategoryBar.astro';
+import PostRow from '../../components/PostRow.astro';
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import { getPublishedPosts } from '../../utils/posts';
+
+const posts = await getPublishedPosts();
+---
+
+<BaseLayout title="博客" description="Sparkle 的机器人开发、工程实践与学习记录。">
+  <header class="page-hero">
+    <div class="section-shell page-hero-inner">
+      <div>
+        <p class="eyebrow">Archive</p>
+        <h1>博客</h1>
+        <p>记录一下我到底做了啥，以及问题最后是怎么解决的。</p>
+      </div>
+      <a class="btn btn-outline" href="/search/"><Search size={18} stroke-width={2} /> 搜索文章</a>
+    </div>
+  </header>
+
+  <section class="section section-paper" data-pagefind-body>
+    <div class="section-shell">
+      <CategoryBar />
+
+      <div class="post-list">
+        {posts.map((post) => (
+          <div data-reveal>
+            <PostRow post={post} />
+          </div>
+        ))}
+      </div>
+    </div>
+  </section>
+</BaseLayout>

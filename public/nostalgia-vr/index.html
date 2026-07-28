@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>UIUC Nostalgia VR Reservation</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="site-header">
+    <a class="brand" href="#home" aria-label="UIUC Nostalgia VR home">
+      <span class="brand-mark">VR</span>
+      <span>
+        <strong>Nostalgia VR</strong>
+        <small>UIUC Charity Experience</small>
+      </span>
+    </a>
+
+    <nav class="nav-links" aria-label="Main navigation">
+      <a href="#locations">Locations</a>
+      <a href="#booking">Reserve</a>
+      <a href="learn-more.html">Learn More</a>
+      <a href="ethics-plan.html">Ethics Plan</a>
+      <a href="research-support.html">Research Support</a>
+      <a href="#donate">Donate</a>
+    </nav>
+
+    <a class="btn btn-small" href="#booking">Book Now</a>
+  </header>
+
+  <main>
+    <!-- HERO / HOME -->
+    <section id="home" class="hero-section">
+      <div class="hero-overlay"></div>
+      <div class="hero-content">
+        <p class="eyebrow">A 3–5 minute campus-based VR reflection</p>
+        <h1>Back into a memory</h1>
+        <h1>Leave with Reason to Care</h1>
+        <p class="hero-copy">
+          UIUC Nostalgia VR is a short, voluntary, charity-oriented experience designed for closely experience those happening far away from your sights.
+        </p>
+        <div class="hero-actions">
+          <a class="btn" href="#booking">Reserve a Time</a>
+          <a class="btn btn-ghost" href="learn-more.html">Learn More</a>
+        </div>
+      </div>
+    </section>
+
+    <section class="feature-strip" aria-label="Key promises">
+      <article>
+        <strong>Short</strong>
+        <span>3-5 mins designed to fit between classes.</span>
+      </article>
+      <article>
+        <strong>Consent-Based</strong>
+        <span>You may pause, skip, or leave whenever you want.</span>
+      </article>
+      <article>
+        <strong>Reflective</strong>
+        <span>Built for empathy, not guilt. We are not forcing you to act, but inspiring you to think</span>
+      </article>
+      <article>
+        <strong>Actionable</strong>
+        <span>Donate, volunteer, or simply learn about people's hard lives far away.</span>
+      </article>
+    </section>
+
+    <!-- VIDEO -->
+    <section class="section video-section">
+      <div class="section-heading">
+        <p class="eyebrow">Preview</p>
+        <h2>What the experience feels like?</h2>
+        <p>
+          UNICEF is testing voluntary project using VR similar to us. This is a 360-degree video from UNICEF project <i>The Source | charity: water VR Experience</i> showing a 13 years old girl's walking the water experience.
+        </p>
+      </div>
+
+      <div class="video-shell">
+        <video class="preview-video" controls poster="assets/preview-poster.png">
+          <source src="assets/nostalgia-preview.mp4" type="video/mp4" />
+        </video>
+        <div class="video-note">
+          <strong>Tip:</strong> For our project, we are using a different and brand-new mechanism with this project: Nostalgia.
+        </div>
+      </div>
+    </section>
+
+    <!-- LOCATIONS -->
+    <section id="locations" class="section locations-section">
+      <div class="section-heading">
+        <p class="eyebrow">Choose a Location</p>
+        <h2>Locations below are available for scheduling</h2>
+        <p>
+          Click a campus location below, and it will give you a preview of this location.
+        </p>
+      </div>
+
+      <div class="location-layout">
+        <div class="location-buttons" role="tablist" aria-label="Campus location choices">
+          <button class="location-btn active" data-location="union" type="button">Illini Union</button>
+          <button class="location-btn" data-location="quad" type="button">Main Quad</button>
+          <button class="location-btn" data-location="hall" type="button">Residence Hall</button>
+          <button class="location-btn" data-location="classroom" type="button">Classroom Studio</button>
+        </div>
+        <article class="location-card">
+          <img id="locationImage" src="assets/illini-union.jpg" alt="Illini Union location preview" />
+          <div class="location-text">
+            <p class="eyebrow">Selected Location</p>
+            <h3 id="locationTitle">Illini Union</h3>
+            <p id="locationDescription">
+              The Illini Union acts as the main check-in point. Most of our activities will be organized here. Here, participants will receive a short orientation, complete a consent reminder, and enter a guided VR scene focused on inspiring users' feelings of Nostalgia.
+            </p>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section id="guarantee" class="section guarantee-section">
+      <div class="section-heading">
+        <p class="eyebrow">Participant Guarantee</p>
+        <h2>What you will experience in our project?</h2>
+        <p>
+          This project is designed as a short, voluntary, and reflective VR experience.
+          It uses nostalgia to help participants think about memory, care, and social
+          responsibility, but it does not try to force a donation or control what users
+          should feel.
+        </p>
+      </div>
+
+            <div class="guarantee-grid">
+        <article class="guarantee-card">
+          <span>01</span>
+          <h3>Before the headset</h3>
+          <p>
+            You will receive a plain-language explanation of the experience, including its approximate length, emotional theme, and charity connection. You will be reminded that participation is completely voluntary and that you can stop at any point.
+          </p>
+        </article>
+
+        <article class="guarantee-card">
+          <span>02</span>
+          <h3>During the VR experience</h3>
+          <p>
+            You will enter a short, guided scene inspired by common feelings of famliy reunion, primary school memory, childhood memories and belonging. The scene will avoid graphic, shocking, or fear-based content. It is designed for your own thoughts and reflections, not forcing you to make donations.
+          </p>
+        </article>
+
+        <article class="guarantee-card">
+          <span>03</span>
+          <h3>After the experience</h3>
+          <p>
+            You may sit quietly, write a brief reflection, ask questions, or leave. Donation and volunteering options will be presented only after the VR portion is over, so the choice remains separate and voluntary to ensure the lowest level of manipulation.
+          </p>
+        </article>
+
+        <article class="guarantee-card">
+          <span>04</span>
+          <h3>No manipulation</h3>
+          <p>
+            The project will not use hidden persuasion, guilt-based scripts, countdown pressure, personalized emotional targeting, or deceptive statistics. The website and staff will make it clear that saying “no” is an acceptable outcome.
+          </p>
+        </article>
+
+        <article class="guarantee-card">
+          <span>05</span>
+          <h3>Privacy</h3>
+          <p>
+            This prototype form is for demonstration. In a real version, only necessary reservation information would be collected. Reflection responses would be optional, and personal data would not be sold or shared for unrelated advertising.
+          </p>
+        </article>
+
+        <article class="guarantee-card">
+          <span>06</span>
+          <h3>Accessibility and care</h3>
+          <p>
+            Participants who are uncomfortable with VR, motion, or emotional themes may choose an alternative text or video version. The experience should support empathy without excluding people who cannot or do not want to use a headset.
+          </p>
+        </article>
+      </div>
+
+      <div class="guarantee-actions">
+        <a class="btn" href="ethics-plan.html">Read full Ethics Explanation</a>
+        <a class="btn btn-secondary" href="#reserve">Continue to Booking</a>
+      </div>
+    </section>
+
+    <!-- BOOKING -->
+    <section id="booking" class="section booking-section">
+      <div class="section-heading">
+        <p class="eyebrow">Reservation</p>
+        <h2>Book a short VR reflection slot</h2>
+        <p>Choose a date, time, and location.</p>
+      </div>
+
+      <div class="booking-grid">
+        <section class="panel">
+          <h3>1. Select Date</h3>
+          <div class="calendar" aria-label="Date choices">
+            <button type="button" class="selected" data-date="Apr 18">Apr 18</button>
+            <button type="button" data-date="Apr 19">Apr 19</button>
+            <button type="button" data-date="Apr 20">Apr 20</button>
+            <button type="button" data-date="Apr 21">Apr 21</button>
+            <button type="button" data-date="Apr 22">Apr 22</button>
+            <button type="button" data-date="Apr 23">Apr 23</button>
+          </div>
+        </section>
+
+        <section class="panel">
+          <h3>2. Select Time</h3>
+          <div class="time-list" aria-label="Time choices">
+            <button type="button" class="selected" data-time="10:00 AM">10:00 AM <span>4 seats</span></button>
+            <button type="button" data-time="11:30 AM">11:30 AM <span>2 seats</span></button>
+            <button type="button" data-time="1:00 PM">1:00 PM <span>5 seats</span></button>
+            <button type="button" data-time="3:30 PM">3:30 PM <span>3 seats</span></button>
+          </div>
+        </section>
+
+        <section class="panel">
+          <h3>3. Select Location</h3>
+          <label class="field-label" for="bookingLocation">Campus site</label>
+          <select id="bookingLocation">
+            <option value="union">Illini Union</option>
+            <option value="quad">Main Quad</option>
+            <option value="hall">Residence Hall Lounge</option>
+            <option value="classroom">Classroom Studio</option>
+          </select>
+
+          <div class="mini-preview">
+            <img id="bookingLocationImage" src="assets/illini-union.jpg" alt="Booking location preview" />
+            <span id="bookingLocationName">Illini Union</span>
+          </div>
+        </section>
+
+        <section class="panel">
+          <h3>4. Your Information</h3>
+          <form id="bookingForm">
+            <label class="field-label" for="name">Name</label>
+            <input id="name" name="name" type="text" placeholder="Your name" required />
+
+            <label class="field-label" for="email">Email</label>
+            <input id="email" name="email" type="email" placeholder="netid@illinois.edu" required />
+
+            <label class="field-label" for="studentId">Student ID / Optional</label>
+            <input id="studentId" name="studentId" type="text" placeholder="Optional" />
+
+            <button class="btn form-submit" type="submit">Confirm Reservation</button>
+          </form>
+        </section>
+      </div>
+
+      <div id="confirmation" class="confirmation" hidden></div>
+    </section>
+
+
+
+    <!-- DONATION -->
+    <section id="donate" class="section donate-section">
+      <div class="donate-card">
+        <div>
+          <p class="eyebrow">After Reflection</p>
+          <h2>Choose how you want to respond</h2>
+          <p>
+            Donation is optional. You can donate, volunteer, share the project, or simply leave with the reflection. The experience is successful only if the choice remains yours.
+          </p>
+        </div>
+        <div class="donate-actions">
+          <a class="btn" href="#booking">Reserve First</a>
+          <a class="btn btn-secondary" href="ethics-plan.html">Read Ethics Explanation</a>
+          <a class="btn btn-secondary" href="research-support.html">View Research Support</a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <p>UIUC Nostalgia VR Reservation Website Prototype</p>
+    <p>Created for assignment 4.</p>
+  </footer>
+
+  <script src="script.js"></script>
+</body>
+</html>

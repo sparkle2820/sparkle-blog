@@ -1,0 +1,31 @@
+---
+import { getCategory } from '../content/categories';
+import { formatDate } from '../utils/posts';
+
+interface Props {
+  id: string;
+  title: string;
+  description: string;
+  publishedAt: Date;
+  category: string;
+  featuredImage: string;
+}
+
+const { id, title, description, publishedAt, category, featuredImage } = Astro.props;
+const href = `/blog/${id}/`;
+const meta = getCategory(category);
+---
+
+<article class="story">
+  <a class="story-media" href={href} tabindex="-1" aria-hidden="true">
+    <img src={featuredImage} alt="" loading="lazy" />
+  </a>
+
+  <p class="story-meta">
+    <a class="story-cat" href={`/blog/category/${meta.slug}/`}>{meta.name}</a>
+    <time datetime={publishedAt.toISOString()}>{formatDate(publishedAt)}</time>
+  </p>
+
+  <h3 class="story-title"><a href={href}>{title}</a></h3>
+  <p class="story-excerpt">{description}</p>
+</article>

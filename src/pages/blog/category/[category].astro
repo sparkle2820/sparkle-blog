@@ -1,0 +1,60 @@
+---
+import { Search } from 'lucide-astro';
+import CategoryBar from '../../../components/CategoryBar.astro';
+import PostRow from '../../../components/PostRow.astro';
+import { categories } from '../../../content/categories';
+import BaseLayout from '../../../layouts/BaseLayout.astro';
+import { getPublishedPosts, type Post } from '../../../utils/posts';
+
+export async function getStaticPaths() {
+  const posts = await getPublishedPosts();
+
+  // 只为有文章的分类出页面，空分类不生成，避免死链
+  return categories
+    .map((category) => ({
+      category,
+      posts: posts.filter((post) => post.data.category === category.slug),
+    }))
+    .filter((entry) => entry.posts.length > 0)
+    .map((entry) => ({
+      params: { category: entry.category.slug },
+      props: { name: entry.category.name, description: entry.category.description, posts: entry.posts },
+    }));
+}
+
+interface Props {
+  name: string;
+  description: string;
+  posts: Post[];
+}
+
+const { name, description, posts } = Astro.props;
+const { category } = Astro.params;
+---
+
+<BaseLayout title={name} description={description}>
+  <header class="page-hero">
+    <div class="section-shell page-hero-inner">
+      <div>
+        <p class="eyebrow">Category</p>
+        <h1>{name}</h1>
+        <p>{description}</p>
+      </div>
+      <a class="btn btn-outline" href="/search/"><Search size={18} stroke-width={2} /> 搜索文章</a>
+    </div>
+  </header>
+
+  <section class="section section-paper" data-pagefind-body>
+    <div class="section-shell">
+      <CategoryBar active={category} />
+
+      <div class="post-list">
+        {posts.map((post) => (
+          <div data-reveal>
+            <PostRow post={post} />
+          </div>
+        ))}
+      </div>
+    </div>
+  </section>
+</BaseLayout>

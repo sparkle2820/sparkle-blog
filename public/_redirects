@@ -1,0 +1,14 @@
+/index.php/2026/06/19/navigation/  /blog/navigation/  301
+/index.php/2026/06/19/navigation  /blog/navigation/  301
+/index.php/2026/04/29/can-curiosity-may-end-shameless-explained/  /blog/can-curiosity-may-end-shameless-explained/  301
+/index.php/2026/04/29/can-curiosity-may-end-shameless-explained  /blog/can-curiosity-may-end-shameless-explained/  301
+/index.php/2026/04/18/hello-world/  /blog/hello-world/  301
+/index.php/2026/04/18/hello-world  /blog/hello-world/  301
+/index.php/blog/  /blog/  301
+/index.php/category/studying/  /blog/  301
+/index.php/hestia-front/  /  301
+/index.php/feed/  /rss.xml  301
+/index.php/comments/feed/  /rss.xml  301
+/wp-sitemap.xml  /sitemap-index.xml  301
+/wp-content/uploads/*  /media/:splat  301
+/index.php/*  /  301

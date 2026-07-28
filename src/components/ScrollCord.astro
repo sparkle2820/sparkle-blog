@@ -1,0 +1,42 @@
+---
+// 顶部一条随滚动收紧的进度线。
+---
+
+<div class="scroll-cord" aria-hidden="true">
+  <span class="scroll-cord-fill" data-scroll-cord></span>
+</div>
+
+<script>
+  let listeners = new AbortController();
+
+  document.addEventListener('astro:before-swap', () => {
+    listeners.abort();
+    listeners = new AbortController();
+  });
+
+  function initScrollCord() {
+    const cord = document.querySelector<HTMLElement>('[data-scroll-cord]');
+    if (!cord) return;
+
+    let ticking = false;
+
+    const update = () => {
+      const scrollable = document.documentElement.scrollHeight - window.innerHeight;
+      const progress = scrollable > 0 ? window.scrollY / scrollable : 0;
+      cord.style.transform = `scaleX(${Math.max(0, Math.min(1, progress))})`;
+      ticking = false;
+    };
+
+    const schedule = () => {
+      if (ticking) return;
+      ticking = true;
+      requestAnimationFrame(update);
+    };
+
+    window.addEventListener('scroll', schedule, { passive: true, signal: listeners.signal });
+    window.addEventListener('resize', schedule, { passive: true, signal: listeners.signal });
+    update();
+  }
+
+  document.addEventListener('astro:page-load', initScrollCord);
+</script>

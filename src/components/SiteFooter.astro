@@ -1,0 +1,44 @@
+---
+import { Github, Rss } from 'lucide-astro';
+import StarCanvas from './StarCanvas.astro';
+
+const year = new Date().getFullYear();
+
+// 备案号下来后填进来即可自动展示（阶段 2）
+const icp = '';
+const police = '';
+---
+
+<footer class="site-footer">
+  <StarCanvas variant="stars" />
+
+  <div class="footer-shell">
+    <div>
+      <strong>Sparkle</strong>
+      <p>工程记录、机器人实践与生活片段。愿那道光一直亮着。</p>
+    </div>
+    <div class="footer-meta">
+      <span>© {year} Xu · sparkle1128.top</span>
+      <div class="footer-links">
+        <a class="icon-button" href="https://github.com/sparkle2820" target="_blank" rel="noreferrer" aria-label="GitHub" title="GitHub">
+          <Github size={19} stroke-width={2} />
+        </a>
+        <a class="icon-button" href="/rss.xml" aria-label="RSS" title="RSS">
+          <Rss size={19} stroke-width={2} />
+        </a>
+      </div>
+    </div>
+  </div>
+
+  {(icp || police) && (
+    <div class="footer-beian">
+      {icp && (
+        <a href="https://beian.miit.gov.cn/" target="_blank" rel="noreferrer">{icp}</a>
+      )}
+      {icp && police && <span> · </span>}
+      {police && (
+        <a href="https://beian.mps.gov.cn/" target="_blank" rel="noreferrer">{police}</a>
+      )}
+    </div>
+  )}
+</footer>

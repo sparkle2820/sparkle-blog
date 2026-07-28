@@ -1,0 +1,34 @@
+---
+import { categories } from '../content/categories';
+import { getPublishedPosts } from '../utils/posts';
+
+interface Props {
+  /** 当前分类 slug；不传表示「全部」 */
+  active?: string;
+}
+
+const { active } = Astro.props;
+const posts = await getPublishedPosts();
+
+// 只列出真正有文章的分类，避免点进空归档
+const used = categories
+  .map((category) => ({
+    ...category,
+    count: posts.filter((post) => post.data.category === category.slug).length,
+  }))
+  .filter((category) => category.count > 0);
+---
+
+<nav class="category-bar" aria-label="文章分类">
+  <a class:list={['chip', { 'is-active': !active }]} href="/blog/">
+    全部<span>{posts.length}</span>
+  </a>
+  {used.map((category) => (
+    <a
+      class:list={['chip', { 'is-active': active === category.slug }]}
+      href={`/blog/category/${category.slug}/`}
+    >
+      {category.name}<span>{category.count}</span>
+    </a>
+  ))}
+</nav>

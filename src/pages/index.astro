@@ -1,0 +1,146 @@
+---
+import { ArrowDown, ArrowRight, ExternalLink } from 'lucide-astro';
+import PostCard from '../components/PostCard.astro';
+import StarCanvas from '../components/StarCanvas.astro';
+import BaseLayout from '../layouts/BaseLayout.astro';
+import { getPublishedPosts } from '../utils/posts';
+
+const posts = await getPublishedPosts();
+
+const profiles = [
+  {
+    title: '钢琴菜鸟',
+    text: '弹了十多年钢琴，技术刚好够弹喜欢的曲子。比起舞台，更享受一个人慢慢磨出熟悉旋律的时刻。',
+    image: '/media/2026/04/3-e1776524425444.jpg',
+    alt: '钢琴键盘与机械结构',
+  },
+  {
+    title: '想做具身',
+    text: '在机器人、感知与大模型的交叉地带做些真正能走出屏幕的东西，边学边把实践过程完整记录下来。',
+    image: '/media/2026/04/1-2.jpg',
+    alt: '机器人机械结构',
+  },
+  {
+    title: '在浙大',
+    text: '海宁国际校区也是浙大的校区。仍在起点，继续把好奇心变成能落地的工程能力。',
+    image: '/media/2026/04/3-1-scaled-e1776525531317.jpg',
+    alt: '浙江大学校园建筑',
+  },
+];
+---
+
+<BaseLayout transparentHeader>
+  <!-- 电影开场：云海 + 划过的彗星 -->
+  <section class="hero">
+    <div class="hero-sky">
+      <img
+        class="hero-still"
+        src="/media/2026/04/1.jpg"
+        alt="黄昏时分，一颗彗星划过云海上方的天空"
+        fetchpriority="high"
+      />
+      <div class="hero-veil"></div>
+
+      <svg class="hero-comet" viewBox="0 0 1200 700" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+        <path class="comet-trail" d="M1178 46 C 940 176, 742 306, 486 528" />
+      </svg>
+
+      <StarCanvas variant="sparks" />
+    </div>
+
+    <div class="hero-inner" data-hero-exit>
+      <p class="hero-kicker">スパークル from Xu</p>
+      <h1 class="hero-title" aria-label="Sparkle">
+        {'Sparkle'.split('').map((character, index) => (
+          <span aria-hidden="true" style={`--i:${index}`}>{character}</span>
+        ))}
+      </h1>
+      <p class="hero-lede">记录机器人、工程实践，以及那些让人愿意继续向前的灵光。</p>
+      <div class="hero-actions">
+        <a class="btn btn-primary" href="/blog/">浏览文章 <ArrowRight size={18} stroke-width={2} /></a>
+        <a class="btn btn-ghost" href="#about">认识我 <ArrowDown size={18} stroke-width={2} /></a>
+      </div>
+    </div>
+
+    <a class="hero-scroll" href="#about" aria-label="向下滚动">
+      <span>Scroll</span>
+      <ArrowDown size={16} stroke-width={2} />
+    </a>
+  </section>
+
+  <!-- 我是谁 -->
+  <section class="section section-paper" id="about" aria-labelledby="about-title">
+    <div class="section-shell">
+      <header class="section-heading" data-reveal>
+        <p class="eyebrow">Who am I?</p>
+        <h2 id="about-title">我是谁？</h2>
+        <p>在兴趣、校园与工程现场之间，慢慢搭出自己的坐标。</p>
+      </header>
+
+      <div class="profile-grid">
+        {profiles.map((profile, index) => (
+          <article class="profile-card" data-reveal data-reveal-delay={index}>
+            <img src={profile.image} alt={profile.alt} loading="lazy" />
+            <div class="profile-card-body">
+              <h3>{profile.title}</h3>
+              <p>{profile.text}</p>
+            </div>
+          </article>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <!-- 記憶带：那颗彗星 -->
+  <section class="band" aria-labelledby="memory-title">
+    <img
+      class="band-media"
+      src="/media/2026/04/cropped-2.jpg"
+      alt="晨光照亮山谷与湖面"
+      loading="lazy"
+      data-parallax="14"
+    />
+    <div class="band-veil"></div>
+    <StarCanvas variant="stars" />
+    <span class="band-comet" aria-hidden="true"></span>
+
+    <div class="band-inner" data-reveal>
+      <p class="eyebrow light">A lasting light</p>
+      <h2 id="memory-title">你的名字是神！</h2>
+      <p>那颗迪亚马特彗星象征着奇迹与理想，陪我走过中学困苦的几年，也仍会在往后的路上闪耀。</p>
+    </div>
+  </section>
+
+  <!-- 最近记录 -->
+  <section class="section section-warm" aria-labelledby="posts-title">
+    <div class="section-shell">
+      <header class="section-heading split-heading" data-reveal>
+        <div>
+          <p class="eyebrow">Field notes</p>
+          <h2 id="posts-title">最近记录</h2>
+          <p>机器人开发与踩坑过程，尽量留下可复现的路径。</p>
+        </div>
+        <a class="btn btn-outline" href="/blog/">全部文章 <ArrowRight size={18} stroke-width={2} /></a>
+      </header>
+
+      <div class="story-grid">
+        {posts.slice(0, 3).map((post, index) => (
+          <div data-reveal data-reveal-delay={index}>
+            <PostCard id={post.id} {...post.data} />
+          </div>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <!-- 课程项目 -->
+  <section class="project-band" aria-labelledby="project-title">
+    <div data-reveal>
+      <p class="eyebrow light">Course project</p>
+      <h2 id="project-title">Nostalgia VR</h2>
+      <p>一个关于记忆、怀旧与虚拟现实伦理的 RHET 课程项目。</p>
+      <a class="btn btn-ghost" href="/nostalgia-vr/">打开项目 <ExternalLink size={17} stroke-width={2} /></a>
+    </div>
+    <img src="/assets/nostalgia-preview.webp" alt="Nostalgia VR 项目界面预览" loading="lazy" data-reveal data-reveal-delay="1" />
+  </section>
+</BaseLayout>

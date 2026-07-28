@@ -1,0 +1,124 @@
+---
+import { Menu, Search, X } from 'lucide-astro';
+
+interface Props {
+  currentPath: string;
+  transparent?: boolean;
+}
+
+const { currentPath, transparent = false } = Astro.props;
+
+const navItems = [
+  { href: '/#about', label: '关于' },
+  { href: '/blog/', label: '博客' },
+  { href: 'https://sparkle2820.github.io/sparkle-daily/latest.html', label: '具身日报', external: true },
+  { href: '/nostalgia-vr/', label: 'Nostalgia VR' },
+];
+---
+
+<header class="site-header" data-site-header data-transparent={transparent ? 'true' : 'false'}>
+  <div class="nav-shell">
+    <a class="brand" href="/" aria-label="Sparkle 首页">
+      <img src="/media/2026/04/cropped-cropped-cropped-1-e1776522665125.png" alt="" width="34" height="34" />
+      <span>Sparkle</span>
+    </a>
+
+    <nav class="desktop-nav" aria-label="主导航">
+      {navItems.map((item) => (
+        <a
+          href={item.href}
+          class:list={{ active: item.href.startsWith('/blog') && currentPath.startsWith('/blog') }}
+          target={item.external ? '_blank' : undefined}
+          rel={item.external ? 'noreferrer' : undefined}
+        >
+          {item.label}
+        </a>
+      ))}
+    </nav>
+
+    <div class="nav-actions">
+      <a class="icon-button" href="/search/" aria-label="搜索" title="搜索">
+        <Search size={19} stroke-width={2} />
+      </a>
+      <button class="icon-button menu-button" type="button" aria-label="打开导航" aria-expanded="false" aria-controls="mobile-nav">
+        <Menu class="menu-open-icon" size={21} stroke-width={2} />
+        <X class="menu-close-icon" size={21} stroke-width={2} />
+      </button>
+    </div>
+  </div>
+
+  <nav class="mobile-nav" id="mobile-nav" aria-label="移动导航" hidden>
+    {navItems.map((item) => (
+      <a href={item.href} target={item.external ? '_blank' : undefined} rel={item.external ? 'noreferrer' : undefined}>
+        {item.label}
+      </a>
+    ))}
+  </nav>
+</header>
+
+<script>
+  let listeners = new AbortController();
+
+  document.addEventListener('astro:before-swap', () => {
+    listeners.abort();
+    listeners = new AbortController();
+  });
+
+  function initHeader() {
+    const header = document.querySelector<HTMLElement>('[data-site-header]');
+    if (!header) return;
+
+    const button = header.querySelector<HTMLButtonElement>('.menu-button');
+    const menu = header.querySelector<HTMLElement>('.mobile-nav');
+
+    button?.addEventListener(
+      'click',
+      () => {
+        const isOpen = button.getAttribute('aria-expanded') === 'true';
+        button.setAttribute('aria-expanded', String(!isOpen));
+        button.setAttribute('aria-label', isOpen ? '打开导航' : '关闭导航');
+        if (menu) menu.hidden = isOpen;
+      },
+      { signal: listeners.signal },
+    );
+
+    menu?.querySelectorAll('a').forEach((link) => {
+      link.addEventListener(
+        'click',
+        () => {
+          button?.setAttribute('aria-expanded', 'false');
+          button?.setAttribute('aria-label', '打开导航');
+          if (menu) menu.hidden = true;
+        },
+        { signal: listeners.signal },
+      );
+    });
+
+    // 透明页头：滚过首屏后落纸
+    if (header.dataset.transparent !== 'true') {
+      header.dataset.stuck = 'true';
+      return;
+    }
+
+    let ticking = false;
+
+    const update = () => {
+      const stuck = window.scrollY > window.innerHeight * 0.7;
+      header.dataset.transparent = stuck ? 'false' : 'true';
+      header.dataset.stuck = stuck ? 'true' : 'false';
+      ticking = false;
+    };
+
+    const schedule = () => {
+      if (ticking) return;
+      ticking = true;
+      requestAnimationFrame(update);
+    };
+
+    window.addEventListener('scroll', schedule, { passive: true, signal: listeners.signal });
+    window.addEventListener('resize', schedule, { passive: true, signal: listeners.signal });
+    update();
+  }
+
+  document.addEventListener('astro:page-load', initHeader);
+</script>
