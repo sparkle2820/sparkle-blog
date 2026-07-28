@@ -5,6 +5,8 @@ import { promisify } from 'node:util';
 import sitemap from '@astrojs/sitemap';
 import { defineConfig } from 'astro/config';
 
+import cloudflare from '@astrojs/cloudflare';
+
 const run = promisify(execFile);
 
 /**
@@ -40,10 +42,13 @@ function pagefind() {
 export default defineConfig({
   site: 'https://www.sparkle1128.top',
   integrations: [sitemap(), pagefind()],
+
   markdown: {
     shikiConfig: {
       theme: 'github-dark',
       wrap: true,
     },
   },
+
+  adapter: cloudflare()
 });
