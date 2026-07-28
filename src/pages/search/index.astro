@@ -27,6 +27,14 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
       if (!mount || mount.dataset.booted === 'true') return;
       mount.dataset.booted = 'true';
 
+      // 索引没构建出来时，别留一个什么都没有的空框让人干瞪眼
+      if (typeof PagefindUI === 'undefined') {
+        mount.innerHTML =
+          '<p class="search-unavailable">站内搜索暂时不可用（索引未随本次构建生成）。' +
+          '你可以先去 <a href="/blog/">博客归档</a> 按分类浏览。</p>';
+        return;
+      }
+
       new PagefindUI({
         element: '#search',
         showSubResults: true,

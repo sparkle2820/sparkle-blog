@@ -22,7 +22,7 @@ const profiles = [
   },
   {
     title: '在浙大',
-    text: '海宁国际校区也是浙大的校区。仍在起点，继续把好奇心变成能落地的工程能力。',
+    text: '仍在起点，会继续把好奇心变成能落地的工程能力。',
     image: '/media/2026/04/3-1-scaled-e1776525531317.jpg',
     alt: '浙江大学校园建筑',
   },
@@ -78,14 +78,17 @@ const profiles = [
       </header>
 
       <div class="profile-grid">
+        {/* reveal 挂在外层 div 上：卡片自己带 transition，同元素会互相覆盖 */}
         {profiles.map((profile, index) => (
-          <article class="profile-card" data-reveal data-reveal-delay={index}>
-            <img src={profile.image} alt={profile.alt} loading="lazy" />
-            <div class="profile-card-body">
-              <h3>{profile.title}</h3>
-              <p>{profile.text}</p>
-            </div>
-          </article>
+          <div data-reveal data-reveal-delay={index}>
+            <article class="profile-card">
+              <img src={profile.image} alt={profile.alt} loading="lazy" />
+              <div class="profile-card-body">
+                <h3>{profile.title}</h3>
+                <p>{profile.text}</p>
+              </div>
+            </article>
+          </div>
         ))}
       </div>
     </div>
@@ -141,6 +144,8 @@ const profiles = [
       <p>一个关于记忆、怀旧与虚拟现实伦理的 RHET 课程项目。</p>
       <a class="btn btn-ghost" href="/nostalgia-vr/">打开项目 <ExternalLink size={17} stroke-width={2} /></a>
     </div>
-    <img src="/assets/nostalgia-preview.webp" alt="Nostalgia VR 项目界面预览" loading="lazy" data-reveal data-reveal-delay="1" />
+    <div data-reveal data-reveal-delay="1">
+      <img src="/assets/nostalgia-preview.webp" alt="Nostalgia VR 项目界面预览" loading="lazy" />
+    </div>
   </section>
 </BaseLayout>

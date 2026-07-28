@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "astro dev",
-    "build": "astro build && pagefind --site dist",
+    "build": "astro build",
     "preview": "astro preview",
     "check": "astro check",
     "check:dist": "node scripts/check-dist.mjs",
@@ -17,14 +17,17 @@
     "@astrojs/rss": "^4.0.19",
     "@astrojs/sitemap": "^3.7.3",
     "astro": "^7.1.4",
-    "lucide-astro": "^0.556.0"
+    "lucide-astro": "^0.556.0",
+    "pagefind": "^1.5.2"
   },
   "devDependencies": {
     "@astrojs/check": "^0.9.10",
     "cheerio": "^1.2.0",
-    "pagefind": "^1.5.2",
     "turndown": "^7.2.4",
     "turndown-plugin-gfm": "^1.0.2",
     "typescript": "^6.0.3"
+  },
+  "engines": {
+    "node": ">=22.12.0"
   }
 }

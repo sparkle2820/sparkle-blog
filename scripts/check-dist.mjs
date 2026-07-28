@@ -9,6 +9,14 @@ const htmlFiles = (await walk(dist)).filter((file) => file.endsWith('.html'));
 const errors = [];
 let checkedReferences = 0;
 
+// 搜索索引整个目录都可能因为构建命令被换掉而静默消失，单独兜一条。
+// 下面的逐个引用检查只覆盖 HTML 里写死的那两个文件，覆盖不到运行时按需拉取的分片。
+for (const required of ['pagefind/pagefind-ui.js', 'pagefind/pagefind-ui.css', 'pagefind/pagefind-entry.json']) {
+  if (!existsSync(path.join(dist, required))) {
+    errors.push(`缺少 ${required} —— 站内搜索会开天窗，检查 astro build 是否跑了 pagefind 集成`);
+  }
+}
+
 for (const file of htmlFiles) {
   const html = await fs.readFile(file, 'utf8');
   const relativeFile = path.relative(dist, file);
