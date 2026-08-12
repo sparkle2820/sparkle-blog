@@ -1,5 +1,5 @@
 ---
-title: "室内巡航（下篇）：使用Mid-360与Nav2让外卖小车通过闸机、玻璃门并完成大厅巡航"
+title: "LIVO-FAST·室内巡航（下篇）：使用Mid-360与Nav2让外卖小车通过闸机、玻璃门并完成大厅巡航"
 description: "上篇完成了Mid-360点云查看和RTAB-Map建图，这一篇继续记录如何把地图接入Nav2，让一台没有轮速计的差速小车真正跑过闸机、玻璃门台阶和无图长走廊。"
 publishedAt: "2026-08-12T12:00:00"
 category: "engineering"
@@ -103,6 +103,8 @@ elevator
   -> turn_point2
   -> turn_point3
 ```
+
+最初期的小车，只有一个框架
 
 ![实际调试小车巡航的现场](/media/2026/08/indoor-cruise-debug.jpg)
 
@@ -210,6 +212,8 @@ python3 ~/dev_ws/scripts/cross_threshold.py --now --ros-args \\
 
 ![Lumeo 车载配送界面的目的地选择页](/media/2026/08/lumeo-screen-route-selection.png)
 
+预告：室外巡航
+
 这层界面和导航栈之间通过 ROS 话题连接：
 
 ```text
@@ -236,3 +240,9 @@ python3 ~/dev_ws/scripts/cross_threshold.py --now --ros-args \\
 三楼的实验室配送路线也已经跑通。跨楼层部分已经完成门洞检测和进出梯逻辑的开发与仿真验证，下一步是把人按键、门开窗口和换图重定位放到完整实车流程里反复测试。
 
 上篇解决的是“雷达能不能看到、地图能不能建出来”，这一篇解决的是“地图之外的现实障碍怎么处理”。实际机器人项目最后往往不是某一个算法节点决定成败，而是定位、底盘、电源、人员位置、门槛和脚本退出行为一起决定的。
+
+## 文尾预告：视觉识别模型与 VLA 模型
+
+后续准备把视觉识别模型和 VLA 模型接入机器人，让小车不只依赖预先写好的路线和激光几何，也能识别电梯按钮，并控制机械臂完成按键等具体动作。
+
+![机械臂按下电梯按钮的现场画面](/media/2026/08/vision-vla-preview.jpg)

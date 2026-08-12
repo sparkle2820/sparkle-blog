@@ -1,5 +1,5 @@
 ---
-title: "室内巡航（上篇）：Ubuntu22.04查看LIVOX Mid-360激光雷达点云并使用RTAPMAP框架进行第一次建图"
+title: "LIVO-FAST·室内巡航（上篇）：Ubuntu22.04查看LIVOX Mid-360激光雷达点云并使用RTAPMAP框架进行第一次建图"
 description: "雷达介绍 览沃Livox混合固态360°全景3D激光雷达（LIVOX Mid-360）为以太网 UD ..."
 publishedAt: "2026-06-19T01:06:27"
 updatedAt: "2026-06-19T01:14:54"
