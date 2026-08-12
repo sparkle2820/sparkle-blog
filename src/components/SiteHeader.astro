@@ -11,7 +11,6 @@ const { currentPath, transparent = false } = Astro.props;
 const navItems = [
   { href: '/#about', label: '关于' },
   { href: '/blog/', label: '博客' },
-  { href: 'https://sparkle2820.github.io/sparkle-daily/latest.html', label: '具身日报', external: true },
   { href: '/nostalgia-vr/', label: 'Nostalgia VR' },
 ];
 ---
@@ -28,8 +27,6 @@ const navItems = [
         <a
           href={item.href}
           class:list={{ active: item.href.startsWith('/blog') && currentPath.startsWith('/blog') }}
-          target={item.external ? '_blank' : undefined}
-          rel={item.external ? 'noreferrer' : undefined}
         >
           {item.label}
         </a>
@@ -49,9 +46,7 @@ const navItems = [
 
   <nav class="mobile-nav" id="mobile-nav" aria-label="移动导航" hidden>
     {navItems.map((item) => (
-      <a href={item.href} target={item.external ? '_blank' : undefined} rel={item.external ? 'noreferrer' : undefined}>
-        {item.label}
-      </a>
+      <a href={item.href}>{item.label}</a>
     ))}
   </nav>
 </header>
