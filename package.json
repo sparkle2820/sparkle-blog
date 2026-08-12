@@ -10,6 +10,8 @@
     "check": "astro check",
     "check:dist": "node scripts/check-dist.mjs",
     "verify": "npm run check && npm run build && npm run check:dist",
+    "deploy": "wrangler deploy --config wrangler.jsonc --no-autoconfig",
+    "preview:cloudflare": "wrangler dev --config wrangler.jsonc",
     "new": "node scripts/new-post.mjs",
     "migrate": "node scripts/migrate-wordpress.mjs"
   },
@@ -25,7 +27,8 @@
     "cheerio": "^1.2.0",
     "turndown": "^7.2.4",
     "turndown-plugin-gfm": "^1.0.2",
-    "typescript": "^6.0.3"
+    "typescript": "^6.0.3",
+    "wrangler": "4.121.0"
   },
   "engines": {
     "node": ">=22.12.0"
