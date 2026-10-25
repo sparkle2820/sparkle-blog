@@ -1,6 +1,6 @@
 ---
 title: "把 LingBot-VLA 2.0 训进 RoboTwin：一份仍在等待最终 checkpoint 的实验记录"
-description: "在频繁死机的 5090、无 NVLink 的双 3090 和反复中断的借用 H20 上，从第一条失败视频走到多任务后训练、时间集成、JEPA 直接推理与 V100 验收。"
+description: "在频繁死机的 5090、无 NVLink 的双 3090 和反复中断的借用 H20 上，探索 LoRA 模块取舍、少量关键层解冻、时间集成与 JEPA 泛化；激活函数替换作为独立探索记录。"
 publishedAt: "2026-10-25T10:00:00"
 updatedAt: "2026-10-25T10:00:00"
 category: "engineering"
@@ -10,7 +10,7 @@ draft: false
 
 这篇文章写在最终答案出来之前。
 
-我们已经完成了很多小实验：LXC 上的 3090 评测、H20 的长程训练、LoRA 与 1f 模块解冻、官方蒸馏、去噪步数和时间集成、JEPA 视觉特征直接接入、V100 的环境验收。与此同时，H20 和正在使用的 LXC 还在跑一个 **200k checkpoint 的全量评测**。那一轮的最终成功率尚未写入结果表，所以本文把已经核验的实验写成阶段性结论，把正在进行的部分明确留白。
+这轮后训练的主线，是在有限显存和随时可能中断的计算资源里，把参数预算花在有效的位置：LoRA 应该覆盖哪些模块，哪些关键层值得少量全参解冻，以及训练之外的推理配置能带来多少收益。沿着这条线，我们做了单任务和多任务训练、官方蒸馏、时间集成、JEPA 直接推理，也把激活函数替换作为一次独立探索。与此同时，H20 和正在使用的 LXC 还在跑一个 **200k checkpoint 的全量评测**，最终成绩留待完整验收。
 
 先交代一个经常被漂亮曲线遮住的事实：这不是一支坐在八卡 H100 或六卡 Pro 6000 上从容扫参的队伍。我们的主力资源是一张**会经常死机的 RTX 5090**、一对**没有 NVLink 的 RTX 3090**，以及一张**借来的、还会被反复中断的 H20**。换句话说，别人是在算力集群里做实验，我们是在“这次重启之后还能不能找到上次的 checkpoint”里做实验。很多结果不是靠堆卡堆出来的，而是靠把每次中断前留下的 JSON、日志和 hash 接起来得到的。这种寒酸不是修辞，而是实验解释的一部分：我们的吞吐、训练步数和最终稳定性不能拿来和 8×H100、6×Pro 6000 的队伍直接横比。
 
@@ -42,9 +42,36 @@ LingBot-VLA 2.0 是一个 Vision-Language-Action（VLA）模型：输入图像�
 | H20 96 GB，sm_90，借用 | 长程训练和大规模全任务评测 | 产出 D+1f@60000、154800 等权重；当前 200k checkpoint 全量评测仍在进行；训练与评测会被外部占用中断 |
 | LXC RTX 3090 ×2，sm_86，无 NVLink | 快速闭环筛选、单任务对照、双卡时间集成 | E001–E013 多数推理消融和 E014 JEPA-affinity 评测；GPU0/GPU1 并行验证 delay_select 与 medoid；两张卡各自跑格子，并没有组成一张大显存卡 |
 | RTX 5090，32 GB，单卡 | 训练尝试与并行评测候选 | 机器经常死机，因此只把能留下完整 checkpoint、日志和结果的运行计入结论 |
-| V100，sm_70，独立借用验收 | 环境兼容性与 FP32/eager 小规模验收 | 单卡 15 optimizer steps、真实 simulator 计分链路、Warp/CuRobo 探针；八卡 NCCL 与训练资源在验收快照中仍为排队状态 |
 
-V100 的单卡实测是 **median 38.0393 秒/optimizer step，0.42037 samples/s**，但这个数字只适用于那份 FP32/eager、global batch 16、micro batch 1、accumulation 16 的验收配置。它也不是一条稳定的八卡训练通道，而是一份“至少证明这套环境能在 V100 上启动并跑完真实入口”的借用验收。[V100 结果](https://github.com/Chenxibenxi/PhiZJU/tree/main/experiments/E015_v100_environment_acceptance)
+## LoRA 也得省着训：先决定把参数花在哪里
+
+“资源紧张就用 LoRA”只说完了前半句。我们连 LoRA 都要按模块精打细算，更谈不上让模型全部参数一起更新。基座权重、前向激活和反向计算仍然要占资源；从只适配 action expert 到扩大视觉、语言侧的覆盖，训练的成本和能改变的行为都会变化。我们的日常更像给显存做预算：动作头申请一点，视觉编码器申请一点，最后由 OOM 担任财务总监。
+
+LoRA 的基本做法是冻结原权重 `W`，训练低秩增量 `ΔW = (α/r)BA`。**“对一个模块使用 LoRA”不等于“这个模块的全部原始权重都在训练”**；“全位置 LoRA”在我们的配置里也只是指定 attention 位置的覆盖范围。少量边界模块的全参训练则另用正则明确指定，两者共同构成最终可训集合。[LoRA 原论文](https://arxiv.org/abs/2106.09685)、[实际训练配置](https://github.com/Chenxibenxi/PhiZJU/blob/main/experiments/E008_result_catalog/results/raw/tools/f1_C_ft.yaml)
+
+| 配方 | 参数预算投向哪里 | 归档可训参数量 |
+|---|---|---:|
+| C：action attention LoRA r32 | 先让动作专家适配任务，视觉／语言骨干保持冻结 | 约1534万 |
+| D：扩大 attention LoRA 覆盖 | 将低秩适配扩到语言、视觉与动作侧的指定 attention 位置 | 约4360万 |
+| C＋1f | action attention LoRA，加五个输入／输出与时间边界模块全参 | 17,234,743 |
+| 1a | 在 C＋1f 上增加 router 和 shared expert 全参 | 约7651万 |
+| 2a | 在 C＋1f 上增加 ViT attention／MLP LoRA，以及视觉 merger 全参 | 约1.389亿 |
+
+这些是不同实验的可训集合，**不是同一条长训把所有模块逐个叠满**。C/D 的早期显存标定、1f 配置与 1a/2a 的4500步记录分别保留，不能把不同数据预算的结果直接排成一张“参数越多越好”的排行榜。[C/D 参数与显存记录](https://github.com/Chenxibenxi/PhiZJU/blob/main/common/records/facts.md)、[1a/2a 实验](https://github.com/Chenxibenxi/PhiZJU/tree/main/experiments/E005_module_unfreezing)
+
+### 为什么会挑出五个 1f 模块
+
+1f 保留 action attention LoRA，额外训练 `state_proj`、`action_in_proj`、`action_out_proj`、`action_time_mlp_in` 和 `action_time_mlp_out`：它们负责把本体状态、带噪动作和 flow time 接入动作分支，并把结果投回动作空间。新增全参预算约190万，优先修改输入／输出接口，而不是直接解冻整套专家。
+
+![C、C＋1f 与关键帧加权方案的训练和闭环对照](/media/2026/10/lingbot-vla/f1_compare.png)
+
+在这次 `lift_pot` 探针里，4500步留出首步手臂误差从 C 的约0.083 rad 到 C＋1f 的0.0476 rad；10集闭环为0/10对4/10。同checkpoint的另一次录像评测只有1/10，因此这组结果只能作为支持继续探索的信号。C 与 f1_C 还使用了不同 normalization，不能把全部差值单独归因于解冻模块。上图也保留了关键帧三倍采样的负结果：f1_A 留出误差0.0684 rad，闭环0/10。[逐帧误差与闭环记录](https://github.com/Chenxibenxi/PhiZJU/tree/main/experiments/E003_training_ablations)
+
+### Router、shared expert，还是视觉侧
+
+随后在同为 `lift_pot` clean50、4500步的 1a/2a 中，原生 N10 分别为4/30与2/30；N1＋时间集成分别为15/30与27/30。2a 的视觉扩展在这批闭环记录里得到较高点估计，但它的 randomized 开环误差也更高，证据仍受单训练seed和小样本限制。
+
+对我们来说，“LoRA 训练效益最大化”的含义是：在能完成训练、保存、导出和闭环验收的预算内，比较把参数投到哪里更值得。它是一条模块选择的探索路线，现有实验还不能证明找到了全局最优配置。完整 routed experts 解冻则单列为更大预算的方案，不混作已经完成的收益。[模块消融与扩展方案](https://github.com/Chenxibenxi/PhiZJU/tree/main/experiments/E005_module_unfreezing)
 
 ## 第一阶段：先让一台模型真的动起来
 
@@ -181,19 +208,11 @@ AGFT-inspired image/action alignment、Weak-SIGReg、TC-SIGReg 和 DFT 都被写
 
 它们在博客里出现，是因为它们决定了下一轮实验怎么设计；不是因为它们已经为这份 VLA 带来了提升。
 
-## E015：V100 环境验收
+## 探索实验 E016：换掉 shared expert 的激活函数会怎样
 
-V100 不是 H20 的替代品，而是单独的一份平台合同：sm_70、FP32/eager、Torch 2.6.0＋cu124、真实 Warp/CuRobo。我们在单卡上完成了 15 个 optimizer steps，6 组 trainable parameter group 都实际更新且保持 finite；真实 simulator 上跑通 clean/seen 和 randomized/unseen 两个 `lift_pot` 计分 episode，都是 0/1。
+在参数模块选择之外，我们还做了一次小范围激活函数探索：保持 LoRA＋1f 的可训范围，只替换 action shared-expert 的36个激活位置，比较 SiLU、ReLU、PReLU。三臂均为seed42、6000 updates，闭环固定BF16、N5、无时间集成。
 
-![V100 clean/seen 计分帧](/media/2026/10/lingbot-vla/v100_clean_midpoint.png)
-
-![V100 randomized/unseen 计分帧](/media/2026/10/lingbot-vla/v100_randomized_midpoint.png)
-
-冒烟帧说明渲染和计分链路，不能估计 benchmark 成绩。V100 的八卡 NCCL 与训练仍按验收快照标成 pending，博客不会把单卡吞吐外推成八卡吞吐。[E015](https://github.com/Chenxibenxi/PhiZJU/tree/main/experiments/E015_v100_environment_acceptance)
-
-## E016：把 shared expert 的激活函数换掉
-
-最后一类已经完成的筛查是 J5 三臂：只替换 action shared-expert 的 36 个 activation sites，保持 seed42、6000 updates、BF16、N5、无时间集成。
+SiLU 对输入做平滑门控；ReLU 将负半轴置零；PReLU 则让负半轴斜率 `a` 参与学习。这里每个 shared expert 只增加一个 slope，初值0.1，总共新增36个标量，可训参数从17,234,743到17,234,779。它测试的是这36个位置的改动，而非将整套视觉、语言和动作网络的激活全部替换。[PReLU 原论文](https://arxiv.org/abs/1502.01852)、[Swish／SiLU 相关研究](https://arxiv.org/abs/1710.05941)、[实际训练范围与参数清单](https://github.com/Chenxibenxi/PhiZJU/tree/main/experiments/E016_activation_functions)
 
 | 激活 | held-out VLA loss | move_playingcard_away | lift_pot |
 |---|---:|---:|---:|
@@ -201,7 +220,7 @@ V100 不是 H20 的替代品，而是单独的一份平台合同：sm_70、FP32/
 | ReLU | 0.0495592 | 36/60 | 0/30 |
 | PReLU | 0.0475137 | 37/60 | 0/30 |
 
-两种替代激活都没有达到预设的 held-out 改善和闭环边际门槛。当前证据支持保留 SiLU 作为筛查基线，但不能据此宣称“SiLU 饱和是长训 loss 不下降的原因”。[E016 结果与负控](https://github.com/Chenxibenxi/PhiZJU/tree/main/experiments/E016_activation_functions)
+每臂的 held-out loss 来自5条留出episode、40个固定frame、每帧2个noise seeds，共80次观测；闭环总计270回合。PReLU在扑克牌上多成功1集，仍未达到原定的至少10pp闭环改善和至少5%留出loss改善门槛。ReLU、PReLU的留出loss点估计都高于SiLU，因此这次探索保留负结果，继续使用SiLU筛查基线。它也没有建立“SiLU饱和导致长训停滞”的因果证据。[E016 原始记录与负控](https://github.com/Chenxibenxi/PhiZJU/tree/main/experiments/E016_activation_functions)
 
 ## 现在最重要的空白：200k checkpoint
 
@@ -225,6 +244,9 @@ V100 不是 H20 的替代品，而是单独的一份平台合同：sm_70、FP32/
 
 ## 引用与完整证据
 
+- LoRA：Hu et al., *LoRA: Low-Rank Adaptation of Large Language Models*，[`arXiv:2106.09685`](https://arxiv.org/abs/2106.09685)。
+- PReLU：He et al., *Delving Deep into Rectifiers*，[`arXiv:1502.01852`](https://arxiv.org/abs/1502.01852)。
+- Swish：Ramachandran et al., *Searching for Activation Functions*，[`arXiv:1710.05941`](https://arxiv.org/abs/1710.05941)。
 - LingBot-VLA 2.0：[`arXiv:2607.06403`](https://arxiv.org/abs/2607.06403)，[Robbyant/lingbot-vla-v2](https://github.com/Robbyant/lingbot-vla-v2)。
 - JEPA-VLA：[`arXiv:2602.11832`](https://arxiv.org/abs/2602.11832)。
 - VLA-JEPA：[`arXiv:2602.10098`](https://arxiv.org/abs/2602.10098)。
