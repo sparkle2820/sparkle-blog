@@ -20,16 +20,20 @@ function pagefind() {
     hooks: {
       'astro:build:done': async ({ dir, logger }) => {
         const site = fileURLToPath(dir);
-        const binary = fileURLToPath(new URL('./node_modules/.bin/pagefind', import.meta.url));
+        // On Windows npm keeps the executable in a shell shim without an
+        // extension; spawning that path directly raises ENOENT. Invoke the
+        // package's real Node wrapper so local Windows builds and CI use the
+        // same Pagefind binary resolution.
+        const runner = fileURLToPath(new URL('./node_modules/pagefind/lib/runner/bin.cjs', import.meta.url));
 
-        if (!existsSync(binary)) {
+        if (!existsSync(runner)) {
           throw new Error(
             'pagefind 没装上，站内搜索会失效。它在 dependencies 里，' +
               '如果构建环境设了 NODE_ENV=production 也应该照常安装 —— 检查依赖安装步骤。',
           );
         }
 
-        const { stdout } = await run(binary, ['--site', site]);
+        const { stdout } = await run(process.execPath, [runner, '--site', site]);
         const indexed = stdout.match(/Indexed (\d+) pages/)?.[1];
         logger.info(`已建立站内搜索索引${indexed ? `（${indexed} 个页面）` : ''}`);
       },

@@ -1,0 +1,233 @@
+---
+title: "把 LingBot-VLA 2.0 训进 RoboTwin：一份仍在等待最终 checkpoint 的实验记录"
+description: "在频繁死机的 5090、无 NVLink 的双 3090 和反复中断的借用 H20 上，从第一条失败视频走到多任务后训练、时间集成、JEPA 直接推理与 V100 验收。"
+publishedAt: "2026-10-25T10:00:00"
+updatedAt: "2026-10-25T10:00:00"
+category: "engineering"
+featuredImage: "/media/2026/10/lingbot-vla/cover_clean_success.jpg"
+draft: false
+---
+
+这篇文章写在最终答案出来之前。
+
+我们已经完成了很多小实验：LXC 上的 3090 评测、H20 的长程训练、LoRA 与 1f 模块解冻、官方蒸馏、去噪步数和时间集成、JEPA 视觉特征直接接入、V100 的环境验收。与此同时，H20 和正在使用的 LXC 还在跑一个 **200k checkpoint 的全量评测**。那一轮的最终成功率尚未写入结果表，所以本文把已经核验的实验写成阶段性结论，把正在进行的部分明确留白。
+
+先交代一个经常被漂亮曲线遮住的事实：这不是一支坐在八卡 H100 或六卡 Pro 6000 上从容扫参的队伍。我们的主力资源是一张**会经常死机的 RTX 5090**、一对**没有 NVLink 的 RTX 3090**，以及一张**借来的、还会被反复中断的 H20**。换句话说，别人是在算力集群里做实验，我们是在“这次重启之后还能不能找到上次的 checkpoint”里做实验。很多结果不是靠堆卡堆出来的，而是靠把每次中断前留下的 JSON、日志和 hash 接起来得到的。这种寒酸不是修辞，而是实验解释的一部分：我们的吞吐、训练步数和最终稳定性不能拿来和 8×H100、6×Pro 6000 的队伍直接横比。
+
+这比把一张漂亮的冒烟截图当成最终成绩更诚实，也更接近机器人实验真正的样子：模型会在一个 pot 上看起来像要成功，下一秒却把它推翻；一张 loss 曲线会继续下降，闭环成功率却停在原地；同一个时间集成算法换一份 checkpoint，方向也可能反过来。
+
+![E014 冒烟评测中的 clean/seen 成功场景](/media/2026/10/lingbot-vla/cover_clean_success.jpg)
+
+上图是 **154800 checkpoint、N10、legacy P7** 的 `clean/seen` 冒烟帧。它证明的是这一集被成功计分，以及渲染和动作链路正常；它不代表 50 个任务的总体成功率。
+
+## 先把问题说清楚：我们到底在优化什么
+
+LingBot-VLA 2.0 是一个 Vision-Language-Action（VLA）模型：输入图像、指令和机器人状态，输出一段动作。它的 action expert 采用稀疏 MoE，并把不同 embodiment 的动作映射到统一的 55 维表示中。[官方技术报告与代码](https://arxiv.org/abs/2607.06403) [官方仓库](https://github.com/Robbyant/lingbot-vla-v2)
+
+我们的目标不是让一条训练 loss 看起来更低，而是让同一份模型在 RoboTwin 2.0 的多任务闭环里更少失败，尤其是 `randomized/unseen`：物品位置、颜色、背景和纹理改变之后，模型仍然要找对东西、抓到东西，并在有限的动作执行窗口里完成任务。
+
+因此每一轮都要同时回答四个问题：
+
+1. **模型身份是否相同？** 起点、adapter、normalization、精度和推理参数必须绑定到 manifest。
+2. **数据是否干净？** 训练使用 clean split；randomized 只作为测试域。
+3. **改动究竟在哪里？** 是训练模块、loss、去噪器、时间集成，还是评测循环。
+4. **闭环是否真的改善？** held-out loss 和开环误差只能做诊断，不能替代任务成功率。
+
+仓库中每个实验目录都保存了 README、JSON、原始日志和复核脚本。[实验索引](https://github.com/Chenxibenxi/PhiZJU/tree/main/experiments) [成果总览](https://github.com/Chenxibenxi/PhiZJU/blob/main/experiments/reports/2026-10-24_results_sync/README.md)
+
+## 三台机器，三种不同的工作
+
+| 设备 | 实际角色 | 已核验内容 |
+|---|---|---|
+| H20 96 GB，sm_90，借用 | 长程训练和大规模全任务评测 | D+1f@60000 全 50 tasks clean/seen；154800 adapter 的 JEPA-affinity 直接推理；当前 200k checkpoint 全量评测仍在进行；训练与评测会被外部占用中断 |
+| LXC RTX 3090 ×2，sm_86，无 NVLink | 快速闭环筛选、单任务对照、双卡时间集成 | E001–E013 多数推理消融；GPU0/GPU1 并行验证 delay_select 与 medoid；更像两台各自努力的邻居，不是一个完整的多卡大脑 |
+| RTX 5090，32 GB，单卡 | 训练尝试与并行评测候选 | 机器经常死机，因此只把能留下完整 checkpoint、日志和结果的运行计入结论 |
+| V100，sm_70，独立借用验收 | 环境兼容性与 FP32/eager 小规模验收 | 单卡 15 optimizer steps、真实 simulator 计分链路、Warp/CuRobo 探针；八卡 NCCL 与训练资源在验收快照中仍为排队状态 |
+
+V100 的单卡实测是 **median 38.0393 秒/optimizer step，0.42037 samples/s**，但这个数字只适用于那份 FP32/eager、global batch 16、micro batch 1、accumulation 16 的验收配置。它也不是一条稳定的八卡训练通道，而是一份“至少证明这套环境能在 V100 上启动并跑完真实入口”的借用验收。[V100 结果](https://github.com/Chenxibenxi/PhiZJU/tree/main/experiments/E015_v100_environment_acceptance)
+
+## 第一阶段：先让一台模型真的动起来
+
+最早的基座模型在 `lift_pot` 上 clean 和 randomized 都是 0/10。完整视频显示，模型有时能让双臂靠近 pot，却没有稳定的双手抓取和抬升。这个阶段最重要的成果不是一个高分，而是把错误拆成可观察的链路：目标是否找对、手是否到位、夹爪是否在正确时间闭合、pot 是否保持 upright。
+
+![基座模型 clean 冒烟视频中的 pot 场景](/media/2026/10/lingbot-vla/f1c_episode0_failure.png)
+
+这张帧来自真实评测视频。它展示了失败场景的视觉状态，不能单独告诉我们失败发生在哪个物理条件；对应的原始 MP4、episode 日志和 `meta.json` 保存在本地验收目录中。
+
+### E001–E005：LoRA、1f 和最初的动作推理消融
+
+第一批实验在 LXC 的 BF16 3090 环境中完成，围绕 `lift_pot` 和 `move_playingcard_away` 建立可重复的基线。
+
+| 实验 | 改动 | 已记录结果 |
+|---|---|---|
+| E001 | 去噪步数 × 时间集成 | f1_C@4500 的 `lift_pot`：默认 N10 无集成 9/30，N10＋集成 25/30，N1＋集成 28/30；开环最优步数和闭环最优步数不一致 |
+| E002 | 队友的时间集成矩阵 | 记录了 16 个有效格，包含官方参考、f1C 和 S4P1M2；task mismatch 单独保留 |
+| E003 | 训练采样、时间混合、AdaRMSNorm、9000 步 | f4 默认闭环从 4/30 到 28/30；N1＋集成从 25/30 到 29/30 |
+| E004 | 扑克牌任务与 12500 步模型 | `move_playingcard_away`：默认 19/30，集成 22/30，集成＋N1 18/30，仅重规划 16/30 |
+| E005 | 1a/2a 模块解冻 | 集成＋N1 的两格为 15/30、27/30；完整 MoE 解冻方案作为后续训练说明保留 |
+
+E008 不是一个新的模型干预，而是把前面分散在 LXC、H20 和中继机上的 88 次执行、94 组开环记录和 2210 条逐集 seed 收成一个可复核目录。它把 completed、rejected、task mismatch 和 incomplete 分开，避免把一次串错任务或启动失败写进成绩表。[E008 证据目录](https://github.com/Chenxibenxi/PhiZJU/tree/main/experiments/E008_result_catalog)
+
+![E003 训练、留出 loss 与闭环结果曲线](/media/2026/10/lingbot-vla/training_openloop_curves.png)
+
+这张图把一个容易被忽略的事实放在一起：训练 loss 可以持续下降，开环动作误差也可以改善，但真正的闭环结果仍然要单独测。相关工作包括 LingBot-VLA 2.0 的 action expert 与 RoboTwin 后训练配方，不能把单任务小样本差异扩写成多任务结论。[E003 结果](https://github.com/Chenxibenxi/PhiZJU/tree/main/experiments/E003_training_ablations) [LingBot-VLA 2.0](https://arxiv.org/abs/2607.06403)
+
+### 50 个任务的第一个强参照：E007、E011
+
+H20 D+1f@60000 是我们第一个完整的 50-task 参照，协议固定为 `seen + demo_clean`，每个任务 30 回合，共 1500 回合。
+
+| 推理设置 | 成功数 | 成功率 |
+|---|---:|---:|
+| 原生 N10，无时间集成 | 744/1500 | 49.60% |
+| N5＋时间集成 | 946/1500 | 63.07% |
+| N1＋时间集成 | 822/1500 | 54.80% |
+
+这里的 +13.47pp 是 **N5 与时间集成共同改变后的联合收益**，不是纯时间集成的因果增益。`click_bell` 甚至从原生 7/30 变成 N5 集成 1/30，再在 N1 集成回到 15/30；这也是为什么我们没有把一个配置直接推广到所有 checkpoint。
+
+![E011 时间集成矩阵与逐场景结果](/media/2026/10/lingbot-vla/ensemble_matrix.png)
+
+这批结果受到动作 chunking 和 temporal ensembling 文献的启发。尤其是 “Why Does Action Chunking Improve Behavior Cloning?” 对时间延迟、多源动作和均值策略的讨论，帮助我们把“看起来更平滑”拆成可测的候选；这不是对论文实验的复现，而是固定 LingBot checkpoint 后的工程消融。[E007](https://github.com/Chenxibenxi/PhiZJU/tree/main/experiments/E007_multitask_status) [E011](https://github.com/Chenxibenxi/PhiZJU/tree/main/experiments/E011_h20_60000_ns1_fullsuite) [P07 论文证据](https://github.com/Chenxibenxi/PhiZJU/blob/main/experiments/E013_temporal_posthoc_papers/source_ledger.md)
+
+## 把失败视频也留下来
+
+同一份 f1_C@4500 评测中，10 集视频只有 episode5 成功。成功集和失败集的差异不是“模型有没有输出”，而是动作有没有在接触阶段保持一致：有的 episode 双手接近后 pot 被撞翻，有的双手离 handle 只有不到 1 cm，却没有形成有效抓取。
+
+| 成功视频帧 | 失败视频帧 |
+|---|---|
+| ![f1_C episode5 成功视频帧](/media/2026/10/lingbot-vla/f1c_episode5_success_late.png) | ![f1_C episode0 失败视频帧](/media/2026/10/lingbot-vla/f1c_episode0_failure_late.png) |
+
+这两张图来自评测 MP4 的定点抽帧；它们用于展示机器人现场，不替代 episode 计分。原始记录显示这份重复评测为 1/10，和无视频的同 checkpoint 4/10 一起只能写成 5/20 的现场汇总。[E005 及本地可视化资产](https://github.com/Chenxibenxi/PhiZJU/tree/main/experiments/E005_module_unfreezing)
+
+## E006：官方蒸馏到底改变了什么
+
+官方深度、future-depth 和 future-video alignment 被加入 2a 训练。100-step 探针的显存峰值为 **23485 MiB**；`global_step_4500` 的两格闭环结果是：
+
+- 原生 N10、无集成：6/30；
+- N1＋时间集成：27/30。
+
+两格共同 scene seed 为 28 个，其中 21 个只在集成组合成功，0 个只在原生组合成功。由于去噪步数和时间集成同时变化，正确的表述是“这份蒸馏 checkpoint 的两种推理组合差异”，而不是单独把 +70pp 归因给蒸馏 loss。[E006 结果与复核脚本](https://github.com/Chenxibenxi/PhiZJU/tree/main/experiments/E006_official_distillation)
+
+论文背景来自 LingBot-VLA 2.0 自身的预测表征设计：LingBot-Depth 和 DINO-Video 被用来提供几何与时间先验。这个实验是在现有训练链路里复用官方蒸馏接口，不能写成对新论文方法的完整复现。[LingBot-VLA 2.0 technical report](https://arxiv.org/abs/2607.06403)
+
+## E009–E013：时间集成从“技巧”变成可审计配置
+
+### 单任务和续训对照
+
+E009 对 `click_bell` 做了同一 H20 D+1f@60000 checkpoint 的三格对照：N10＋集成 2/30、N5 无集成 5/30、N1＋集成 15/30。E010 则比较 f1_C@4500 权重重置 optimizer 后续训到 9000，与直接连续训练到 9000：N10 原生从 27/30 到 23/30，N1＋集成均为 29/30。
+
+E012 在 `lift_pot` 的 `unseen + randomized` 上测了续训模型：原生 2/30，N1＋集成 10/30。这个 +26.67pp 很有价值，但仍然是单任务和单 checkpoint，不能当作全任务随机化结论。[E009](https://github.com/Chenxibenxi/PhiZJU/tree/main/experiments/E009_clickbell_denoise_ensemble) [E010](https://github.com/Chenxibenxi/PhiZJU/tree/main/experiments/E010_f1c_weights_continuation) [E012](https://github.com/Chenxibenxi/PhiZJU/tree/main/experiments/E012_liftpot9000_unseen_randomized)
+
+### E013：为什么 P7 仍然是强参照
+
+我们把十篇后处理论文逐篇读成可验证组件，而不是直接把整套方法塞进客户端。P7（Why Chunking Improves Behavior Cloning）最接近当前低成本的 cached-delay 时间集成；GeoAAC 只做 log-only geometry 诊断；REMAC 只保留 prefix-mask 候选；CommitFlow、CereVLA、VLA-Feedback、FBFM、SpecPrune、Speedup Patch 和 CorrectVLA 都被拆成边界明确的候选，而不是宣称已经接入。
+
+同一份 60000 checkpoint、BF16、N5、stride10、`seen + demo_clean` 下：
+
+| 方法 | 覆盖 | 成功 | 成功率 |
+|---|---:|---:|---:|
+| P7 legacy | 50 tasks × 30 | 946/1500 | 63.07% |
+| delay_select | 50 tasks × 20 | 523/1000 | 52.30% |
+| medoid | 50 tasks × 20 | 577/1000 | 57.70% |
+
+两种新方法都低于 P7。paired seed 交集和 task-cluster 区间保存在 canonical JSON 中；因为回合预算不同，不能把三列当成完全对称的实验。[E013 逐任务 JSON](https://github.com/Chenxibenxi/PhiZJU/blob/main/experiments/E013_temporal_posthoc_papers/results/fullsuite20/task_rates.json) [十篇论文 source ledger](https://github.com/Chenxibenxi/PhiZJU/blob/main/experiments/E013_temporal_posthoc_papers/source_ledger.md)
+
+![E013 时间集成配置的局部成功率矩阵](/media/2026/10/lingbot-vla/ensemble_sweep.png)
+
+十篇后处理论文的完整引用与迁移边界：
+
+1. **SpecPrune-VLA**：action-aware speculative pruning；本轮只作为计算预算候选，上传 PDF 的真实性与代码发布状态按 source ledger 记录。
+2. **CommitFlow**（[arXiv:2609.21908](https://arxiv.org/abs/2609.21908)）：语义 commitment verification 与局部恢复；当前缺少阶段、holding 和 contact 标签。
+3. **CereVLA**（[arXiv:2609.27468](https://arxiv.org/abs/2609.27468)）：consequence-aware residual governance；当前只借鉴“收益与伤害分开计数”。
+4. **GeoAAC**（[arXiv:2609.20776](https://arxiv.org/abs/2609.20776)）：从 denoising trajectory 推导 action chunking；当前只做 N5 log-only 诊断。
+5. **VLA-Feedback**（[arXiv:2609.21022](https://arxiv.org/abs/2609.21022)）：冻结 planner、最后一步引入新视觉反馈；需要新的小反馈头和 per-tick observation contract。
+6. **FBFM**（[arXiv:2607.29235](https://arxiv.org/abs/2607.29235)）：异步反馈 flow matching；完整方法依赖 world-action model，不等于当前 action-only 推理。
+7. **Why Does Action Chunking Improve BC?**（上传 PDF `2608.02547_WhyChunkingImprovesBC.pdf`）：时间集成与 delayed action 的直接理论参照；物理页码和 hash 见 source ledger。
+8. **REMAC**（[arXiv:2601.20130](https://arxiv.org/abs/2601.20130)）：masked action chunking；当前实现是 prefix-mask 组件，不是完整 self-conditioned 方法。
+9. **Speedup Patch / SuP**（上传 PDF `iJNYi8dwr4_SpeedupPatch.pdf`）：动作执行密度和物理 waypoint 调整；不等于 solver denoising skip。
+10. **CorrectVLA**（[arXiv:2608.29967](https://arxiv.org/abs/2608.29967)）：language feedback action correction；absolute joint 空间不能直接套 Cartesian offset。
+
+## E014：JEPA 直接推理，而不是先假设它有效
+
+JEPA 是 Joint-Embedding Predictive Architecture；Jev/System One 是 TypeSafe 的结构化决策接口，两者不是同一件事。我们先选择了公开、冻结的 **V-JEPA 2 ViT-L**，把当前图像复制成短因果窗口，提取 patch feature，经坐标对齐和归一化后，把 affinity 作为 bias 注入 LingBot 最后一个 Qwen vision attention block。没有训练新的 fusion head，也没有把它写成“JEPA 一定提高了成功率”。
+
+实际直接推理结果：
+
+| split | 成功 | 成功率 | 覆盖 |
+|---|---:|---:|---:|
+| clean / seen | 698/1000 | 69.80% | 50 tasks × 20 |
+| randomized / unseen | 246/1000 | 24.60% | 50 tasks × 20 |
+
+这是两格 JEPA-affinity 的绝对成绩，不是相对 C0 的因果增益。它使用 BF16、N10、legacy P7、stride10；要证明 JEPA 有独立收益，必须补齐同样精度、P7、episode 预算和 actual seed 的 C0 对照。[E014 结果](https://github.com/Chenxibenxi/PhiZJU/tree/main/experiments/E014_jepa_vla_fusion)
+
+![JEPA 直接推理的 clean 视频帧](/media/2026/10/lingbot-vla/e014_video_clean_success.png)
+
+![JEPA 直接推理的 randomized 视频帧](/media/2026/10/lingbot-vla/e014_video_randomized_failure.png)
+
+上面两张图来自真实 smoke 视频：一张对应 clean/seen 的成功 episode，一张对应 randomized/unseen 的失败 episode。完整统计仍以 1000 条逐集记录为准。
+
+JEPA-VLA 已经提供了“冻结 V-JEPA 2 特征＋gated cross-attention 接入 VLA”的公开先例；VLA-JEPA 则走未来 latent supervision。我们因此把“训练式 JEPA fusion”和“冻结 encoder 直接推理”分开写。[JEPA-VLA](https://arxiv.org/abs/2602.11832) [VLA-JEPA](https://arxiv.org/abs/2602.10098) [V-JEPA 2 官方仓库](https://github.com/facebookresearch/vjepa2)
+
+### E014 之前，哪些训练想法只是设计
+
+AGFT-inspired image/action alignment、Weak-SIGReg、TC-SIGReg 和 DFT 都被写入了候选方案，但当前文章不把它们写成已完成实验：
+
+- **AGFT**（[arXiv:2609.34467](https://arxiv.org/abs/2609.34467)）适合作为保留 native flow-matching、额外加一个对齐项的训练消融。
+- **Weak-SIGReg**（[arXiv:2603.05924](https://arxiv.org/abs/2603.05924)）和 **TC-SIGReg**（[arXiv:2607.26924](https://arxiv.org/abs/2607.26924)）需要明确统计 batch、sketch rank 和时间中心化轴。
+- **DFT**（[arXiv:2508.05629](https://arxiv.org/abs/2508.05629)）的离散 target-token probability 与当前连续 flow-matching loss 不同，不能直接把 `exp(-FM error)` 当成论文中的概率。
+
+它们在博客里出现，是因为它们决定了下一轮实验怎么设计；不是因为它们已经为这份 VLA 带来了提升。
+
+## E015：V100 环境验收
+
+V100 不是 H20 的替代品，而是单独的一份平台合同：sm_70、FP32/eager、Torch 2.6.0＋cu124、真实 Warp/CuRobo。我们在单卡上完成了 15 个 optimizer steps，6 组 trainable parameter group 都实际更新且保持 finite；真实 simulator 上跑通 clean/seen 和 randomized/unseen 两个 `lift_pot` 计分 episode，都是 0/1。
+
+![V100 clean/seen 计分帧](/media/2026/10/lingbot-vla/v100_clean_midpoint.png)
+
+![V100 randomized/unseen 计分帧](/media/2026/10/lingbot-vla/v100_randomized_midpoint.png)
+
+冒烟帧说明渲染和计分链路，不能估计 benchmark 成绩。V100 的八卡 NCCL 与训练仍按验收快照标成 pending，博客不会把单卡吞吐外推成八卡吞吐。[E015](https://github.com/Chenxibenxi/PhiZJU/tree/main/experiments/E015_v100_environment_acceptance)
+
+## E016：把 shared expert 的激活函数换掉
+
+最后一类已经完成的筛查是 J5 三臂：只替换 action shared-expert 的 36 个 activation sites，保持 seed42、6000 updates、BF16、N5、无时间集成。
+
+| 激活 | held-out VLA loss | move_playingcard_away | lift_pot |
+|---|---:|---:|---:|
+| SiLU | 0.0459193 | 36/60 | 0/30 |
+| ReLU | 0.0495592 | 36/60 | 0/30 |
+| PReLU | 0.0475137 | 37/60 | 0/30 |
+
+两种替代激活都没有达到预设的 held-out 改善和闭环边际门槛。当前证据支持保留 SiLU 作为筛查基线，但不能据此宣称“SiLU 饱和是长训 loss 不下降的原因”。[E016 结果与负控](https://github.com/Chenxibenxi/PhiZJU/tree/main/experiments/E016_activation_functions)
+
+## 现在最重要的空白：200k checkpoint
+
+本文发布时，H20 和 LXC 仍在对 **200k checkpoint** 做全量任务评测。那一轮的目标是把训练时间拉长之后的 checkpoint，放进和已有结果一致的 clean/seen 与 randomized/unseen 全任务协议中，比较：
+
+- 原生推理与已经验证过的时间集成配置；
+- H20 与 LXC 的模型、normalization、精度和运行时合同；
+- 训练步数增加后，unseen/randomized 是真正改善、只是 clean 过拟合，还是出现新的 checkpoint/provenance 分叉。
+
+在它完成之前，本文的最终判断只能是：**我们已经找到若干有效的局部配置，也已经确认很多看似合理的改动并不稳定；200k checkpoint 的全任务成绩仍未知。** 后续只需要替换结果 JSON 和对应图表，不需要重写实验叙事。
+
+## 这次实验留下的几条方法论
+
+第一，训练 loss、开环误差、冒烟视频和闭环成功率是四种不同证据。它们应该互相解释，不能互相替代。
+
+第二，时间集成不是模型的“免费升级”。它对 60000 checkpoint 的 P7 N5 有效，但 delay_select 和 medoid 在相同场景上都输给 P7；一个方法如果把多个运动模式平均成一条不存在的轨迹，平滑反而可能是坏事。
+
+第三，JEPA 的直接推理结果已经足够说明“表征增强值得测”，还不足以说明“JEPA 已经解决 randomized/unseen”。真正的对照必须绑定 checkpoint、精度、P7、seed 和 episode 预算。
+
+第四，失败视频不是宣传素材的反面。它们把“接近物体但没有抓取”“抓到了又把物体撞翻”“在随机纹理里找错目标”变成可以继续做诊断的证据。
+
+## 引用与完整证据
+
+- LingBot-VLA 2.0：[`arXiv:2607.06403`](https://arxiv.org/abs/2607.06403)，[Robbyant/lingbot-vla-v2](https://github.com/Robbyant/lingbot-vla-v2)。
+- JEPA-VLA：[`arXiv:2602.11832`](https://arxiv.org/abs/2602.11832)。
+- VLA-JEPA：[`arXiv:2602.10098`](https://arxiv.org/abs/2602.10098)。
+- AGFT：[`arXiv:2609.34467`](https://arxiv.org/abs/2609.34467)。
+- Weak-SIGReg：[`arXiv:2603.05924`](https://arxiv.org/abs/2603.05924)。
+- Temporally Centered SIGReg：[`arXiv:2607.26924`](https://arxiv.org/abs/2607.26924)。
+- DFT：[`arXiv:2508.05629`](https://arxiv.org/abs/2508.05629)。
+- 十篇时间集成与后处理论文的上传版本、物理页码、SHA256 和迁移边界：[PhiZJU source ledger](https://github.com/Chenxibenxi/PhiZJU/blob/main/experiments/E013_temporal_posthoc_papers/source_ledger.md)。其中可公开定位的论文包括 [CommitFlow](https://arxiv.org/abs/2609.21908)、[CereVLA](https://arxiv.org/abs/2609.27468)、[GeoAAC](https://arxiv.org/abs/2609.20776)、[VLA-Feedback](https://arxiv.org/abs/2609.21022)、[FBFM](https://arxiv.org/abs/2607.29235)、[REMAC](https://arxiv.org/abs/2601.20130) 和 [CorrectVLA](https://arxiv.org/abs/2608.29967)。
+
+所有数值和状态都应以 [PhiZJU 的实验目录](https://github.com/Chenxibenxi/PhiZJU/tree/main/experiments) 为准。博客是可读的首版，canonical JSON、manifest、原始日志和复核脚本才是验收记录。
