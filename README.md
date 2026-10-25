@@ -1,7 +1,9 @@
 # Sparkle Blog
 
 `www.sparkle1128.top` 的 Astro 源码，用来替换原来跑在彩虹云上的 WordPress。
-内容是 Git 里的 Markdown，改完 push 就自动上线。
+内容是 Git 里的 Markdown，推送到 `main` 后由 Cloudflare Workers Builds 自动构建和部署。
+
+当前可直接访问的 Cloudflare 地址：[sparkle-blog.zhaokunxu678.workers.dev](https://sparkle-blog.zhaokunxu678.workers.dev/)。VLA 博客首版：[LingBot-VLA 后训练实验记录](https://sparkle-blog.zhaokunxu678.workers.dev/blog/lingbot-vla-posttraining-lab/)。
 
 ## 本地开发
 
@@ -29,7 +31,7 @@ npm run new -- "文章标题" --slug my-post --category engineering
 2. 改 `featuredImage` —— **必须是 `public/` 下真实存在的文件**，写站内绝对路径
 3. 写正文（标准 Markdown，代码块有语法高亮）
 4. 把 `draft: true` 改成 `false` 才会发布
-5. `npm run verify` 通过后 `git push`，Cloudflare Pages 自动构建上线
+5. `npm run verify` 通过后 `git push`，Cloudflare Workers Builds 自动构建上线
 
 `--slug` 决定文章地址 `/blog/<slug>/`，中文标题推导不出 slug，建议手写。
 `--category` 不填默认第一个分类。
@@ -72,11 +74,13 @@ frontmatter 里的 `category` 必须是表里的 slug，写错会在 `npm run ch
 
 ## 部署
 
-Cloudflare Pages：
+Cloudflare Workers Static Assets，项目名 `sparkle-blog`，连接 `sparkle2820/sparkle-blog` 的 `main` 分支：
 
 - Build command：`npm run build`
 - Output directory：`dist`
 - Node.js：`22`
+
+`wrangler.jsonc` 绑定 `dist` 静态资产，仓库的 `npm run deploy` 调用 Wrangler。GitHub commit 的 `Workers Builds: sparkle-blog` check 提供构建状态、部署版本和 Cloudflare Dashboard 链接。`www.sparkle1128.top` 是站点的 canonical 域名；当前线上预览入口使用上述 `workers.dev` 地址。
 
 `public/_redirects` 保留了全部 WordPress 老链接的 301（含三篇文章、分类页、feed、
 `/wp-content/uploads/*` 图片路径）。

@@ -18,7 +18,7 @@ draft: false
 
 ![E014 冒烟评测中的 clean/seen 成功场景](/media/2026/10/lingbot-vla/cover_clean_success.jpg)
 
-上图是 **154800 checkpoint、N10、legacy P7** 的 `clean/seen` 冒烟帧。它证明的是这一集被成功计分，以及渲染和动作链路正常；它不代表 50 个任务的总体成功率。
+上图是 **C0 154800 checkpoint、N10、legacy P7** 的 `clean/seen` 冒烟帧。它证明的是这一集被成功计分，以及渲染和动作链路正常；它不代表 50 个任务的总体成功率。
 
 ## 先把问题说清楚：我们到底在优化什么
 
@@ -35,12 +35,12 @@ LingBot-VLA 2.0 是一个 Vision-Language-Action（VLA）模型：输入图像�
 
 仓库中每个实验目录都保存了 README、JSON、原始日志和复核脚本。[实验索引](https://github.com/Chenxibenxi/PhiZJU/tree/main/experiments) [成果总览](https://github.com/Chenxibenxi/PhiZJU/blob/main/experiments/reports/2026-10-24_results_sync/README.md)
 
-## 三台机器，三种不同的工作
+## 我们的丐版算力拼图
 
 | 设备 | 实际角色 | 已核验内容 |
 |---|---|---|
-| H20 96 GB，sm_90，借用 | 长程训练和大规模全任务评测 | D+1f@60000 全 50 tasks clean/seen；154800 adapter 的 JEPA-affinity 直接推理；当前 200k checkpoint 全量评测仍在进行；训练与评测会被外部占用中断 |
-| LXC RTX 3090 ×2，sm_86，无 NVLink | 快速闭环筛选、单任务对照、双卡时间集成 | E001–E013 多数推理消融；GPU0/GPU1 并行验证 delay_select 与 medoid；更像两台各自努力的邻居，不是一个完整的多卡大脑 |
+| H20 96 GB，sm_90，借用 | 长程训练和大规模全任务评测 | 产出 D+1f@60000、154800 等权重；当前 200k checkpoint 全量评测仍在进行；训练与评测会被外部占用中断 |
+| LXC RTX 3090 ×2，sm_86，无 NVLink | 快速闭环筛选、单任务对照、双卡时间集成 | E001–E013 多数推理消融和 E014 JEPA-affinity 评测；GPU0/GPU1 并行验证 delay_select 与 medoid；两张卡各自跑格子，并没有组成一张大显存卡 |
 | RTX 5090，32 GB，单卡 | 训练尝试与并行评测候选 | 机器经常死机，因此只把能留下完整 checkpoint、日志和结果的运行计入结论 |
 | V100，sm_70，独立借用验收 | 环境兼容性与 FP32/eager 小规模验收 | 单卡 15 optimizer steps、真实 simulator 计分链路、Warp/CuRobo 探针；八卡 NCCL 与训练资源在验收快照中仍为排队状态 |
 
@@ -50,7 +50,7 @@ V100 的单卡实测是 **median 38.0393 秒/optimizer step，0.42037 samples/s*
 
 最早的基座模型在 `lift_pot` 上 clean 和 randomized 都是 0/10。完整视频显示，模型有时能让双臂靠近 pot，却没有稳定的双手抓取和抬升。这个阶段最重要的成果不是一个高分，而是把错误拆成可观察的链路：目标是否找对、手是否到位、夹爪是否在正确时间闭合、pot 是否保持 upright。
 
-![基座模型 clean 冒烟视频中的 pot 场景](/media/2026/10/lingbot-vla/f1c_episode0_failure.png)
+![基座模型 clean 冒烟视频第8秒的 pot 场景](/media/2026/10/lingbot-vla/base6b_clean_frame8.png)
 
 这张帧来自真实评测视频。它展示了失败场景的视觉状态，不能单独告诉我们失败发生在哪个物理条件；对应的原始 MP4、episode 日志和 `meta.json` 保存在本地验收目录中。
 
@@ -68,7 +68,7 @@ V100 的单卡实测是 **median 38.0393 秒/optimizer step，0.42037 samples/s*
 
 E008 不是一个新的模型干预，而是把前面分散在 LXC、H20 和中继机上的 88 次执行、94 组开环记录和 2210 条逐集 seed 收成一个可复核目录。它把 completed、rejected、task mismatch 和 incomplete 分开，避免把一次串错任务或启动失败写进成绩表。[E008 证据目录](https://github.com/Chenxibenxi/PhiZJU/tree/main/experiments/E008_result_catalog)
 
-![E003 训练、留出 loss 与闭环结果曲线](/media/2026/10/lingbot-vla/training_openloop_curves.png)
+![早期 C/D 单任务 LoRA 的训练、留出 loss 与闭环诊断曲线](/media/2026/10/lingbot-vla/training_openloop_curves.png)
 
 这张图把一个容易被忽略的事实放在一起：训练 loss 可以持续下降，开环动作误差也可以改善，但真正的闭环结果仍然要单独测。相关工作包括 LingBot-VLA 2.0 的 action expert 与 RoboTwin 后训练配方，不能把单任务小样本差异扩写成多任务结论。[E003 结果](https://github.com/Chenxibenxi/PhiZJU/tree/main/experiments/E003_training_ablations) [LingBot-VLA 2.0](https://arxiv.org/abs/2607.06403)
 
@@ -84,7 +84,9 @@ H20 D+1f@60000 是我们第一个完整的 50-task 参照，协议固定为 `see
 
 这里的 +13.47pp 是 **N5 与时间集成共同改变后的联合收益**，不是纯时间集成的因果增益。`click_bell` 甚至从原生 7/30 变成 N5 集成 1/30，再在 N1 集成回到 15/30；这也是为什么我们没有把一个配置直接推广到所有 checkpoint。
 
-![E011 时间集成矩阵与逐场景结果](/media/2026/10/lingbot-vla/ensemble_matrix.png)
+![E001 f1_C@4500 的单任务时间集成矩阵与逐场景结果](/media/2026/10/lingbot-vla/ensemble_matrix.png)
+
+上图展示早期 `lift_pot` 单任务筛查，和本节的60000步全任务表具有不同checkpoint与样本范围。
 
 这批结果受到动作 chunking 和 temporal ensembling 文献的启发。尤其是 “Why Does Action Chunking Improve Behavior Cloning?” 对时间延迟、多源动作和均值策略的讨论，帮助我们把“看起来更平滑”拆成可测的候选；这不是对论文实验的复现，而是固定 LingBot checkpoint 后的工程消融。[E007](https://github.com/Chenxibenxi/PhiZJU/tree/main/experiments/E007_multitask_status) [E011](https://github.com/Chenxibenxi/PhiZJU/tree/main/experiments/E011_h20_60000_ns1_fullsuite) [P07 论文证据](https://github.com/Chenxibenxi/PhiZJU/blob/main/experiments/E013_temporal_posthoc_papers/source_ledger.md)
 
@@ -96,7 +98,7 @@ H20 D+1f@60000 是我们第一个完整的 50-task 参照，协议固定为 `see
 |---|---|
 | ![f1_C episode5 成功视频帧](/media/2026/10/lingbot-vla/f1c_episode5_success_late.png) | ![f1_C episode0 失败视频帧](/media/2026/10/lingbot-vla/f1c_episode0_failure_late.png) |
 
-这两张图来自评测 MP4 的定点抽帧；它们用于展示机器人现场，不替代 episode 计分。原始记录显示这份重复评测为 1/10，和无视频的同 checkpoint 4/10 一起只能写成 5/20 的现场汇总。[E005 及本地可视化资产](https://github.com/Chenxibenxi/PhiZJU/tree/main/experiments/E005_module_unfreezing)
+这两张图来自评测 MP4 的定点抽帧；它们用于展示机器人现场，不替代 episode 计分。原始记录显示这份重复评测为 1/10，和无视频的同 checkpoint 4/10 一起只能写成 5/20 的现场汇总。[E003 原始计分记录](https://github.com/Chenxibenxi/PhiZJU/tree/main/experiments/E003_training_ablations)
 
 ## E006：官方蒸馏到底改变了什么
 
@@ -131,7 +133,9 @@ E012 在 `lift_pot` 的 `unseen + randomized` 上测了续训模型：原生 2/3
 
 两种新方法都低于 P7。paired seed 交集和 task-cluster 区间保存在 canonical JSON 中；因为回合预算不同，不能把三列当成完全对称的实验。[E013 逐任务 JSON](https://github.com/Chenxibenxi/PhiZJU/blob/main/experiments/E013_temporal_posthoc_papers/results/fullsuite20/task_rates.json) [十篇论文 source ledger](https://github.com/Chenxibenxi/PhiZJU/blob/main/experiments/E013_temporal_posthoc_papers/source_ledger.md)
 
-![E013 时间集成配置的局部成功率矩阵](/media/2026/10/lingbot-vla/ensemble_sweep.png)
+![E001 f1_C@4500 单任务 denoising sweep 的开环与闭环对照](/media/2026/10/lingbot-vla/ensemble_sweep.png)
+
+上图是 E001 的单任务 sweep；E013 的全任务比较以上表和逐任务 JSON 为准。
 
 十篇后处理论文的完整引用与迁移边界：
 
@@ -159,11 +163,11 @@ JEPA 是 Joint-Embedding Predictive Architecture；Jev/System One 是 TypeSafe �
 
 这是两格 JEPA-affinity 的绝对成绩，不是相对 C0 的因果增益。它使用 BF16、N10、legacy P7、stride10；要证明 JEPA 有独立收益，必须补齐同样精度、P7、episode 预算和 actual seed 的 C0 对照。[E014 结果](https://github.com/Chenxibenxi/PhiZJU/tree/main/experiments/E014_jepa_vla_fusion)
 
-![JEPA 直接推理的 clean 视频帧](/media/2026/10/lingbot-vla/e014_video_clean_success.png)
+![C0 154800 N10＋P7 的 clean/seen 冒烟视频帧](/media/2026/10/lingbot-vla/e014_video_clean_success.png)
 
-![JEPA 直接推理的 randomized 视频帧](/media/2026/10/lingbot-vla/e014_video_randomized_failure.png)
+![C0 154800 N10＋P7 的 randomized/unseen 冒烟视频帧](/media/2026/10/lingbot-vla/e014_video_randomized_failure.png)
 
-上面两张图来自真实 smoke 视频：一张对应 clean/seen 的成功 episode，一张对应 randomized/unseen 的失败 episode。完整统计仍以 1000 条逐集记录为准。
+上面两张图来自 C0 154800 N10＋P7 的真实 smoke 视频，一张对应 clean/seen 成功 episode，一张对应 randomized/unseen 失败 episode，用来展示场景外观差异。JEPA-affinity 的两组成绩由上表各1000条逐集记录支持。
 
 JEPA-VLA 已经提供了“冻结 V-JEPA 2 特征＋gated cross-attention 接入 VLA”的公开先例；VLA-JEPA 则走未来 latent supervision。我们因此把“训练式 JEPA fusion”和“冻结 encoder 直接推理”分开写。[JEPA-VLA](https://arxiv.org/abs/2602.11832) [VLA-JEPA](https://arxiv.org/abs/2602.10098) [V-JEPA 2 官方仓库](https://github.com/facebookresearch/vjepa2)
 
