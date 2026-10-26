@@ -3,7 +3,7 @@
 `www.sparkle1128.top` 的 Astro 源码，用来替换原来跑在彩虹云上的 WordPress。
 内容是 Git 里的 Markdown，推送到 `main` 后由 Cloudflare Workers Builds 自动构建和部署。
 
-当前可直接访问的 Cloudflare 地址：[sparkle-blog.zhaokunxu678.workers.dev](https://sparkle-blog.zhaokunxu678.workers.dev/)。VLA 博客首版：[LingBot-VLA 后训练实验记录](https://sparkle-blog.zhaokunxu678.workers.dev/blog/lingbot-vla-posttraining-lab/)。
+当前可直接访问的 Cloudflare 地址：[sparkle-blog.zhaokunxu678.workers.dev](https://sparkle-blog.zhaokunxu678.workers.dev/)。VLA 博客终版：[LingBot-VLA 185800 steps 实验记录](https://sparkle-blog.zhaokunxu678.workers.dev/blog/lingbot-vla-posttraining-lab/)。
 
 ## 本地开发
 

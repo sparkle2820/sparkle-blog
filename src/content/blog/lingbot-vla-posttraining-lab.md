@@ -1,16 +1,16 @@
 ---
-title: "把 LingBot-VLA 2.0 训进 RoboTwin：一份仍在等待最终 checkpoint 的实验记录"
-description: "在频繁死机的 5090、无 NVLink 的双 3090 和反复中断的借用 H20 上，探索 LoRA 模块取舍、少量关键层解冻、时间集成与 JEPA 泛化；激活函数替换作为独立探索记录。"
+title: "把 LingBot-VLA 2.0 训进 RoboTwin：185800 steps 终版实验记录"
+description: "用经常死机的5090、无NVLink的双3090和借用H20探索LoRA模块取舍与推理优化：终版训练185800 steps，clean成功率71.90%，randomized成功率23.40%，附长训loss图和50任务明细。"
 publishedAt: "2026-10-25T10:00:00"
-updatedAt: "2026-10-25T10:00:00"
+updatedAt: "2026-10-26"
 category: "engineering"
 featuredImage: "/media/2026/10/lingbot-vla/cover_clean_success.jpg"
 draft: false
 ---
 
-这篇文章先交作业，最终成绩随后补。毕竟我们的 GPU 有自己的排班表：模型还在训练，显卡可能已经决定下班；人刚睡着，checkpoint 就成了全组最值得牵挂的文件。
+这回模型终于交卷，训练步数定格在 **185800 steps**。回头看，我们的 GPU 确实有自己的排班表：模型正要加班，显卡可能已经决定下班；人刚睡着，checkpoint 就成了全组最值得牵挂的文件。好在这次账本和成绩单都保住了。
 
-这轮后训练，我们把显存当生活费花：LoRA 先给哪些模块，哪些关键层值得咬牙全参解冻，训练之外还能不能靠推理配置省出一点成绩，都得一项项算。沿着这份账本，我们做了单任务和多任务训练、官方蒸馏、时间集成、JEPA 直接推理，也顺手让激活函数参加了一次“换岗面试”。目前 H20 和 LXC 还在跑 **200k checkpoint 的全量评测**，模型的毕业考尚未交卷，本文先如实记录已经批改完的部分。
+这轮后训练，我们把显存当生活费花：LoRA 先给哪些模块，哪些关键层值得咬牙全参解冻，训练之外还能不能靠推理配置省出一点成绩，都得一项项算。沿着这份账本，我们做了单任务和多任务训练、官方蒸馏、时间集成、JEPA 直接推理，也顺手让激活函数参加了一次“换岗面试”。最后收到的成绩单是 **clean 71.90%、randomized 23.40%**：熟悉场景已经有了起色，换个布景，模型仍然很有自己的想法。[终版结果](#final-results)
 
 看看家底就知道这份账为什么算得这么细：有的参赛队伍配着 **8×H100、6×Pro 6000**，我们手里是一张**经常死机的 RTX 5090**、一对**没有 NVLink 的 RTX 3090**，再加一张**借来且屡次被中断的 H20**。5090 擅长突然休假，两张 3090 虽然住同一间机箱，显存却坚持各过各的，H20 则属于“今天能借多久，就先训多久”。所以我们的实验习惯里，除了看 loss，还得确认机器活着、checkpoint 存着、日志对得上。文章里的吞吐和训练预算，也请连同这套丐版装备一起看。
 
@@ -39,7 +39,7 @@ LingBot-VLA 2.0 是一个 Vision-Language-Action（VLA）模型：输入图像�
 
 | 设备 | 实际角色 | 已核验内容 |
 |---|---|---|
-| H20 96 GB，sm_90，借用 | 长程训练和大规模全任务评测 | 产出 D+1f@60000、154800 等权重；当前 200k checkpoint 全量评测仍在进行；训练与评测会被外部占用中断 |
+| H20 96 GB，sm_90，借用 | 长程训练和大规模全任务评测 | 产出 D+1f@60000、154800 等阶段权重，最终训练到185800 steps；训练与评测受外部占用中断 |
 | LXC RTX 3090 ×2，sm_86，无 NVLink | 快速闭环筛选、单任务对照、双卡时间集成 | E001–E013 多数推理消融和 E014 JEPA-affinity 评测；GPU0/GPU1 并行验证 delay_select 与 medoid；两张卡各自跑格子，并没有组成一张大显存卡 |
 | RTX 5090，32 GB，单卡 | 训练尝试与并行评测候选 | 机器经常死机，因此只把能留下完整 checkpoint、日志和结果的运行计入结论 |
 
@@ -222,15 +222,102 @@ SiLU 对输入做平滑门控；ReLU 将负半轴置零；PReLU 则让负半轴�
 
 每臂的 held-out loss 来自5条留出episode、40个固定frame、每帧2个noise seeds，共80次观测；闭环总计270回合。PReLU在扑克牌上多成功1集，仍未达到原定的至少10pp闭环改善和至少5%留出loss改善门槛。ReLU、PReLU的留出loss点估计都高于SiLU，因此这次探索保留负结果，继续使用SiLU筛查基线。它也没有建立“SiLU饱和导致长训停滞”的因果证据。[E016 原始记录与负控](https://github.com/Chenxibenxi/PhiZJU/tree/main/experiments/E016_activation_functions)
 
-## 现在最重要的空白：200k checkpoint
+<a id="final-results"></a>
 
-本文发布时，H20 和 LXC 仍在对 **200k checkpoint** 做全量任务评测。那一轮的目标是把训练时间拉长之后的 checkpoint，放进和已有结果一致的 clean/seen 与 randomized/unseen 全任务协议中，比较：
+## 终版：185800 steps，全50任务结果
 
-- 原生推理与已经验证过的时间集成配置；
-- H20 与 LXC 的模型、normalization、精度和运行时合同；
-- 训练步数增加后，unseen/randomized 是真正改善、只是 clean 过拟合，还是出现新的 checkpoint/provenance 分叉。
+最终训练步数由作者确认为 **185800 steps**，成绩采用队伍 `PHIZJU` 提供的终版 `results.json`。文件分别记录50个 `clean` 任务和50个 `randomized` 任务，每任务20回合，两域各1000回合。
 
-在它完成之前，本文的最终判断只能是：**我们已经找到若干有效的局部配置，也已经确认很多看似合理的改动并不稳定；200k checkpoint 的全任务成绩仍未知。** 后续只需要替换结果 JSON 和对应图表，不需要重写实验叙事。
+| 评测域 | 成功数／回合数 | 总成功率 | 覆盖 |
+|---|---:|---:|---|
+| clean | **719/1000** | **71.90%** | 50 tasks × 20 episodes |
+| randomized | **234/1000** | **23.40%** | 50 tasks × 20 episodes |
+
+![185800 steps终版：clean为719/1000，randomized为234/1000](/media/2026/10/lingbot-vla/final_results_185800.png)
+
+图表由下方同一份JSON直接生成。每个任务的回合数相等，因此这里的总成功率也等于该域50任务成功率的宏平均；两域相差 **48.50个百分点**，仍有明显的场景泛化落差。
+
+### 哪些任务保住了，哪些任务掉得厉害
+
+`shake_bottle` 和 `shake_bottle_horizontally` 在两个域均为20/20；`place_cans_plasticbox`、`press_stapler` 的 randomized 均为15/20。另一边，`lift_pot` 从clean的18/20到randomized的0/20，`move_playingcard_away` 从19/20到2/20。randomized共有12个任务为0/20。单看clean总分，很容易漏掉这些具体短板。
+
+<details>
+<summary>展开50个任务的终版计数与成功率</summary>
+
+<!-- final-task-table:start -->
+| task | clean | randomized |
+|---|---:|---:|
+| adjust_bottle | 19/20（95.00%） | 1/20（5.00%） |
+| beat_block_hammer | 13/20（65.00%） | 0/20（0.00%） |
+| blocks_ranking_rgb | 18/20（90.00%） | 6/20（30.00%） |
+| blocks_ranking_size | 12/20（60.00%） | 1/20（5.00%） |
+| click_alarmclock | 12/20（60.00%） | 9/20（45.00%） |
+| click_bell | 18/20（90.00%） | 12/20（60.00%） |
+| dump_bin_bigbin | 19/20（95.00%） | 14/20（70.00%） |
+| grab_roller | 20/20（100.00%） | 9/20（45.00%） |
+| handover_block | 12/20（60.00%） | 0/20（0.00%） |
+| handover_mic | 12/20（60.00%） | 1/20（5.00%） |
+| hanging_mug | 4/20（20.00%） | 0/20（0.00%） |
+| lift_pot | 18/20（90.00%） | 0/20（0.00%） |
+| move_can_pot | 18/20（90.00%） | 1/20（5.00%） |
+| move_pillbottle_pad | 15/20（75.00%） | 3/20（15.00%） |
+| move_playingcard_away | 19/20（95.00%） | 2/20（10.00%） |
+| move_stapler_pad | 3/20（15.00%） | 0/20（0.00%） |
+| open_laptop | 19/20（95.00%） | 1/20（5.00%） |
+| open_microwave | 6/20（30.00%） | 3/20（15.00%） |
+| pick_diverse_bottles | 9/20（45.00%） | 2/20（10.00%） |
+| pick_dual_bottles | 13/20（65.00%） | 4/20（20.00%） |
+| place_a2b_left | 9/20（45.00%） | 2/20（10.00%） |
+| place_a2b_right | 13/20（65.00%） | 3/20（15.00%） |
+| place_bread_basket | 18/20（90.00%） | 9/20（45.00%） |
+| place_bread_skillet | 15/20（75.00%） | 6/20（30.00%） |
+| place_burger_fries | 20/20（100.00%） | 11/20（55.00%） |
+| place_can_basket | 17/20（85.00%） | 0/20（0.00%） |
+| place_cans_plasticbox | 18/20（90.00%） | 15/20（75.00%） |
+| place_container_plate | 20/20（100.00%） | 6/20（30.00%） |
+| place_dual_shoes | 11/20（55.00%） | 0/20（0.00%） |
+| place_empty_cup | 18/20（90.00%） | 2/20（10.00%） |
+| place_fan | 8/20（40.00%） | 0/20（0.00%） |
+| place_mouse_pad | 8/20（40.00%） | 0/20（0.00%） |
+| place_object_basket | 15/20（75.00%） | 3/20（15.00%） |
+| place_object_scale | 15/20（75.00%） | 2/20（10.00%） |
+| place_object_stand | 19/20（95.00%） | 13/20（65.00%） |
+| place_phone_stand | 13/20（65.00%） | 0/20（0.00%） |
+| place_shoe | 15/20（75.00%） | 3/20（15.00%） |
+| press_stapler | 19/20（95.00%） | 15/20（75.00%） |
+| put_bottles_dustbin | 2/20（10.00%） | 0/20（0.00%） |
+| put_object_cabinet | 11/20（55.00%） | 3/20（15.00%） |
+| rotate_qrcode | 17/20（85.00%） | 0/20（0.00%） |
+| scan_object | 12/20（60.00%） | 2/20（10.00%） |
+| shake_bottle | 20/20（100.00%） | 20/20（100.00%） |
+| shake_bottle_horizontally | 20/20（100.00%） | 20/20（100.00%） |
+| stack_blocks_three | 16/20（80.00%） | 8/20（40.00%） |
+| stack_blocks_two | 20/20（100.00%） | 13/20（65.00%） |
+| stack_bowls_three | 13/20（65.00%） | 4/20（20.00%） |
+| stack_bowls_two | 19/20（95.00%） | 2/20（10.00%） |
+| stamp_seal | 9/20（45.00%） | 1/20（5.00%） |
+| turn_switch | 10/20（50.00%） | 2/20（10.00%） |
+<!-- final-task-table:end -->
+
+</details>
+
+[下载原始 results.json](/media/2026/10/lingbot-vla/results_185800.json) · [查看矢量结果图](/media/2026/10/lingbot-vla/final_results_185800.svg)
+
+### 终版结论和证据口径
+
+**这份终版结果支持的结论是：clean达到71.90%，randomized为23.40%，泛化短板依然存在。** 相比文中60000步参照，clean点估计更高，但这份汇总文件没有记录精度、去噪步数、P7开关、指令池、checkpoint hash或actual seeds；所以本节沿用文件的 `clean`／`randomized` 标签，不把差值单独归因于长训、时间集成或JEPA。
+
+本次复核覆盖JSON结构、两域相同的50任务名称、每格20回合、成功数合法性和汇总重算。185800步身份依据作者确认，逐集去重与运行配置身份需要对应的日志和manifest支持。
+
+### 长训 loss 和任务成功率，放在一起看
+
+[![作者提供的1至185800步长训loss曲线与全50任务结果，loss里程碑数值待原始CSV复核](/media/2026/10/lingbot-vla/training_loss_and_tasks_185800.jpg)](/media/2026/10/lingbot-vla/training_loss_and_tasks_185800.jpg)
+
+上图由作者提供，点击可以查看原尺寸。上半部分标注了每10步的原始loss，以及500步和5000步EMA平滑曲线；在154800步处，图示学习率由cosine阶段的 `1e-4 → 5e-5` 切换到恒定 `1e-4`。分界前loss整体下降，分界后抬升至另一个波动水平。
+
+**原图注明：loss里程碑数值尚待原始CSV统一复核。** 因此本文将它作为作者提供的训练过程图，按趋势解读；不会仅凭曲线抬升，就判定发生了过拟合或证明学习率切换导致了某个成功率变化。图下50任务两列的100个百分比已与原始JSON逐项核对一致。
+
+终版成绩计数和这张训练过程图分别保留来源；前文早期C/D、1f及单任务曲线继续按各自实验标注。loss帮助定位训练变化，71.90%与23.40%的闭环结果则回答了模型最终能完成多少任务。
 
 ## 这次实验留下的几条方法论
 
@@ -256,4 +343,4 @@ SiLU 对输入做平滑门控；ReLU 将负半轴置零；PReLU 则让负半轴�
 - DFT：[`arXiv:2508.05629`](https://arxiv.org/abs/2508.05629)。
 - 十篇时间集成与后处理论文的上传版本、物理页码、SHA256 和迁移边界：[PhiZJU source ledger](https://github.com/Chenxibenxi/PhiZJU/blob/main/experiments/E013_temporal_posthoc_papers/source_ledger.md)。其中可公开定位的论文包括 [CommitFlow](https://arxiv.org/abs/2609.21908)、[CereVLA](https://arxiv.org/abs/2609.27468)、[GeoAAC](https://arxiv.org/abs/2609.20776)、[VLA-Feedback](https://arxiv.org/abs/2609.21022)、[FBFM](https://arxiv.org/abs/2607.29235)、[REMAC](https://arxiv.org/abs/2601.20130) 和 [CorrectVLA](https://arxiv.org/abs/2608.29967)。
 
-所有数值和状态都应以 [PhiZJU 的实验目录](https://github.com/Chenxibenxi/PhiZJU/tree/main/experiments) 为准。博客是可读的首版，canonical JSON、manifest、原始日志和复核脚本才是验收记录。
+本文的阶段实验可追溯到 [PhiZJU 实验目录](https://github.com/Chenxibenxi/PhiZJU/tree/main/experiments)；185800步终版成绩以队内提供的[原始 results.json](/media/2026/10/lingbot-vla/results_185800.json)为来源。正文保留各次实验的任务、checkpoint、精度和预算边界，终版计数与历史诊断分别报告。
